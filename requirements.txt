@@ -1,5 +1,3 @@
 aiogram
 Flask
-jinja2
-python-dotenv
 reportlab
