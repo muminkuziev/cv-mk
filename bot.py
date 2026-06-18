@@ -49,6 +49,7 @@ def run_web():
 
 
 class CVStates(StatesGroup):
+    template = State()
     full_name = State()
     profession = State()
     phone = State()
@@ -68,10 +69,27 @@ main_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
+template_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Minimalist"), KeyboardButton(text="Corporate")],
+        [KeyboardButton(text="Modern"), KeyboardButton(text="Premium")]
+    ],
+    resize_keyboard=True
+)
+
+TEMPLATE_MAP = {
+    "Minimalist": "minimalist.html",
+    "Corporate": "corporate.html",
+    "Modern": "modern.html",
+    "Premium": "premium.html"
+}
+
 
 def generate_html(data: dict, user_id: int) -> Path:
+    template_file = data.get("template", "minimalist.html")
+
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
-    template = env.get_template("cv_template.html")
+    template = env.get_template(template_file)
 
     html = template.render(
         full_name=data.get("full_name", ""),
@@ -96,45 +114,44 @@ def generate_pdf(data: dict, user_id: int) -> Path:
 
     c = canvas.Canvas(str(pdf_path), pagesize=A4)
     width, height = A4
-
     y = height - 60
 
-    def draw_title(text, size=18):
+    def new_page_if_needed():
         nonlocal y
-        c.setFont("Helvetica-Bold", size)
-        c.drawString(50, y, text)
-        y -= 30
+        if y < 70:
+            c.showPage()
+            y = height - 60
 
-    def draw_text(label, text):
+    def draw_section(title, text):
         nonlocal y
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(50, y, label)
-        y -= 16
+        new_page_if_needed()
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(50, y, title)
+        y -= 20
 
         c.setFont("Helvetica", 10)
-        lines = str(text).split("\n")
-        for line in lines:
-            if y < 60:
-                c.showPage()
-                y = height - 60
+        for line in str(text).split("\n"):
+            new_page_if_needed()
             c.drawString(60, y, line[:95])
             y -= 14
 
-        y -= 8
+        y -= 10
 
-    draw_title(data.get("full_name", "CV"), 22)
+    c.setFont("Helvetica-Bold", 22)
+    c.drawString(50, y, data.get("full_name", "CV"))
+    y -= 28
 
     c.setFont("Helvetica", 12)
     c.drawString(50, y, data.get("profession", ""))
     y -= 30
 
-    draw_text("Telefon:", data.get("phone", ""))
-    draw_text("Email:", data.get("email", ""))
-    draw_text("Manzil:", data.get("address", ""))
-    draw_text("Ish tajribasi:", data.get("experience", ""))
-    draw_text("Ta'lim:", data.get("education", ""))
-    draw_text("Ko‘nikmalar:", data.get("skills", ""))
-    draw_text("Tillar:", data.get("languages", ""))
+    draw_section("Telefon:", data.get("phone", ""))
+    draw_section("Email:", data.get("email", ""))
+    draw_section("Manzil:", data.get("address", ""))
+    draw_section("Ish tajribasi:", data.get("experience", ""))
+    draw_section("Ta'lim:", data.get("education", ""))
+    draw_section("Ko'nikmalar:", data.get("skills", ""))
+    draw_section("Tillar:", data.get("languages", ""))
 
     c.setFont("Helvetica-Oblique", 9)
     c.drawString(50, 35, f"ZiyoCVBot orqali yaratildi • {datetime.now().strftime('%d.%m.%Y')}")
@@ -157,24 +174,52 @@ async def start(message: Message):
 async def help_message(message: Message):
     await message.answer(
         "📌 Bot qanday ishlaydi:\n\n"
-        "1. CV yaratish tugmasini bosing\n"
-        "2. Savollarga javob bering\n"
-        "3. Bot sizga PDF va HTML CV yuboradi"
+        "1. 📄 CV yaratish tugmasini bosing\n"
+        "2. Dizayn tanlang\n"
+        "3. Savollarga javob bering\n"
+        "4. Bot sizga HTML va PDF CV yuboradi"
     )
 
 
 @dp.message(F.text == "📄 CV yaratish")
 async def create_cv(message: Message, state: FSMContext):
     await state.clear()
+    await state.set_state(CVStates.template)
+    await message.answer(
+        "🎨 CV dizaynini tanlang:",
+        reply_markup=template_keyboard
+    )
+
+
+@dp.message(CVStates.template)
+async def choose_template(message: Message, state: FSMContext):
+    if message.text not in TEMPLATE_MAP:
+        await message.answer("Iltimos, pastdagi tugmalardan birini tanlang.")
+        return
+
+    await state.update_data(template=TEMPLATE_MAP[message.text])
     await state.set_state(CVStates.full_name)
-    await message.answer("Ism va familiyangizni yozing:")
+
+    await message.answer(
+        "Ism va familiyangizni yozing:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="❌ Bekor qilish")]],
+            resize_keyboard=True
+        )
+    )
+
+
+@dp.message(F.text == "❌ Bekor qilish")
+async def cancel(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Bekor qilindi.", reply_markup=main_keyboard)
 
 
 @dp.message(CVStates.full_name)
 async def get_full_name(message: Message, state: FSMContext):
     await state.update_data(full_name=message.text)
     await state.set_state(CVStates.profession)
-    await message.answer("Kasbingiz yoki lavozimingizni yozing:\nMasalan: Driver, Builder, Cook, Warehouse Worker")
+    await message.answer("Kasbingiz yoki lavozimingizni yozing:")
 
 
 @dp.message(CVStates.profession)
@@ -216,7 +261,7 @@ async def get_experience(message: Message, state: FSMContext):
 async def get_education(message: Message, state: FSMContext):
     await state.update_data(education=message.text)
     await state.set_state(CVStates.skills)
-    await message.answer("Ko‘nikmalaringizni yozing:\nMasalan: Russian language, driving, construction, teamwork")
+    await message.answer("Ko‘nikmalaringizni yozing:")
 
 
 @dp.message(CVStates.skills)
@@ -235,13 +280,25 @@ async def get_languages(message: Message, state: FSMContext):
 
     await message.answer("⏳ CV tayyorlanmoqda...")
 
-    html_path = generate_html(data, user_id)
-    pdf_path = generate_pdf(data, user_id)
+    try:
+        html_path = generate_html(data, user_id)
+        pdf_path = generate_pdf(data, user_id)
 
-    await message.answer_document(FSInputFile(pdf_path), caption="✅ Sizning PDF CV tayyor.")
-    await message.answer_document(FSInputFile(html_path), caption="🌐 HTML CV fayli ham tayyor.")
+        await message.answer_document(
+            FSInputFile(pdf_path),
+            caption="✅ Sizning PDF CV tayyor."
+        )
+
+        await message.answer_document(
+            FSInputFile(html_path),
+            caption="🌐 HTML CV fayli ham tayyor."
+        )
+
+    except Exception as e:
+        await message.answer(f"❌ Xatolik yuz berdi:\n{e}")
 
     await state.clear()
+    await message.answer("Yana CV yaratish uchun tugmani bosing.", reply_markup=main_keyboard)
 
 
 async def main():
