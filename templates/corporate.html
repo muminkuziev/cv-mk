@@ -1,1 +1,26 @@
-
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>CV</title>
+<style>
+body{font-family:Arial;background:#e5e7eb;padding:30px;color:#111827}
+.cv{max-width:850px;margin:auto;background:white;display:grid;grid-template-columns:260px 1fr}
+.side{background:#111827;color:white;padding:30px}
+.main{padding:30px}
+h1{font-size:28px;margin-bottom:8px}.job{color:#93c5fd;margin-bottom:25px}
+.side p{font-size:14px;line-height:1.6}
+h2{color:#1d4ed8;margin-top:20px}
+p{white-space:pre-line;line-height:1.6}
+</style></head>
+<body><div class="cv">
+<div class="side">
+<h1>{{ full_name }}</h1><div class="job">{{ profession }}</div>
+<p><b>Telefon:</b><br>{{ phone }}</p>
+<p><b>Email:</b><br>{{ email }}</p>
+<p><b>Manzil:</b><br>{{ address }}</p>
+</div>
+<div class="main">
+<h2>Ish tajribasi</h2><p>{{ experience }}</p>
+<h2>Ta'lim</h2><p>{{ education }}</p>
+<h2>Ko‘nikmalar</h2><p>{{ skills }}</p>
+<h2>Tillar</h2><p>{{ languages }}</p>
+</div>
+</div></body></html>
