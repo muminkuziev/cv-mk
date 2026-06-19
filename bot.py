@@ -114,6 +114,7 @@ TXT = {
         "cancel": "❌ Bekor qilish",
         "cancelled": "❌ Bekor qilindi.\n\n🌍 Tilni tanlang:",
         "error": "❌ Xatolik yuz berdi. Qaytadan urinib ko'ring: /start",
+        "footer": "CV_MK Bot tomonidan yaratildi",
         "labels": {
             "summary": "O'zim haqimda",
             "experience": "Ish tajribasi",
@@ -149,6 +150,7 @@ TXT = {
         "cancel": "❌ Отмена",
         "cancelled": "❌ Отменено.\n\n🌍 Выберите язык:",
         "error": "❌ Произошла ошибка. Попробуйте снова: /start",
+        "footer": "Создано CV_MK Bot",
         "labels": {
             "summary": "Обо мне",
             "experience": "Опыт работы",
@@ -184,6 +186,7 @@ TXT = {
         "cancel": "❌ Cancel",
         "cancelled": "❌ Cancelled.\n\n🌍 Choose language:",
         "error": "❌ An error occurred. Please try again: /start",
+        "footer": "Created by CV_MK Bot",
         "labels": {
             "summary": "Professional Summary",
             "experience": "Work Experience",
@@ -568,7 +571,7 @@ def generate_html(data: dict, uid: str) -> Path:
     </div>
 
     <div class="footer">
-      CV_MK Bot tomonidan yaratildi • {datetime.now().strftime("%d.%m.%Y")}
+      {TXT[lang]["footer"]} • {datetime.now().strftime("%d.%m.%Y")}
     </div>
   </main>
 
@@ -761,7 +764,7 @@ def generate_pdf(data: dict, uid: str) -> Path:
     # Footer
     c.setFillColorRGB(*accent)
     c.setFont(FONT, 7)
-    c.drawString(12, 20, f"CV_MK Bot • {datetime.now().strftime('%d.%m.%Y')}")
+    c.drawString(12, 20, f"{TXT[lang]['footer']} • {datetime.now().strftime('%d.%m.%Y')}")
 
     c.save()
     return path
@@ -957,14 +960,16 @@ async def router(message: Message, state: FSMContext):
         case _:
             await state.clear()
             await state.set_state(CV.lang)
-            await message.answer(TXT["uz"]["start"], reply_markup=kb_lang())
+            await message.answer(TXT[lang]["start"], reply_markup=kb_lang())
 
 
 @dp.message()
 async def fallback(message: Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "uz")
     await state.clear()
     await state.set_state(CV.lang)
-    await message.answer(TXT["uz"]["start"], reply_markup=kb_lang())
+    await message.answer(TXT[lang]["start"], reply_markup=kb_lang())
 
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
