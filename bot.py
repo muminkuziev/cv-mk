@@ -618,9 +618,13 @@ async def finalize(msg: Message, state: FSMContext):
 # ── /start ────────────────────────────────────────────────────────────────────
 @dp.message(Command("start"))
 async def cmd_start(msg: Message, state: FSMContext):
-    await state.clear()
-    await state.set_state(CV.lang)
-    await msg.answer(T["uz"]["welcome"], reply_markup=kb_lang())
+    try:
+        await state.clear()
+        await state.set_state(CV.lang)
+        await msg.answer(T["uz"]["welcome"], reply_markup=kb_lang())
+        logger.info("/start: user_id=%s", msg.from_user.id if msg.from_user else "?")
+    except Exception as e:
+        logger.exception("cmd_start xatosi: %s", e)
 
 # ── Til tanlash ───────────────────────────────────────────────────────────────
 @dp.message(StateFilter(CV.lang), F.text.in_(LANG_BUTTONS))
@@ -829,6 +833,19 @@ async def catch_all(msg: Message, state: FSMContext):
 # ── Entry point ───────────────────────────────────────────────────────────────
 async def main():
     logger.info("CV_MK Bot ishga tushmoqda...")
+
+    # Token va ulanishni tekshirish
+    try:
+        me = await bot.get_me()
+        logger.info("Bot ulandi: @%s (id=%s)", me.username, me.id)
+    except Exception as e:
+        logger.critical("BOT_TOKEN noto'g'ri yoki Telegram'ga ulanib bo'lmadi: %s", e)
+        raise
+
+    # Webhook bo'lsa o'chirish — polling bilan konflikt oldini olish
+    await bot.delete_webhook(drop_pending_updates=True)
+    logger.info("Webhook tozalandi. Polling boshlanmoqda...")
+
     threading.Thread(target=run_flask, daemon=True).start()
     await dp.start_polling(bot, allowed_updates=["message"])
 
