@@ -3,7 +3,7 @@ services:
     name: cv-mk
     env: python
     plan: free
-    buildCommand: apt-get update -y && apt-get install -y fonts-dejavu-core && pip install --upgrade pip setuptools wheel && pip install --prefer-binary -r requirements.txt
+    buildCommand: apt-get update -y && apt-get install -y fonts-dejavu-core && pip install -r requirements.txt
     startCommand: python bot.py
     envVars:
       - key: BOT_TOKEN

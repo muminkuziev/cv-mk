@@ -1,73 +1,90 @@
-import os
+"""CV_MK — Professional CV Builder Telegram Bot (Webhook mode, Render-ready)"""
 import asyncio
-import textwrap
 import base64
-import uuid
+import io
 import logging
+import os
+import re
+import textwrap
+import uuid
 from datetime import datetime
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, StateFilter
-from aiogram.types import (
-    Message, KeyboardButton, ReplyKeyboardMarkup,
-    ReplyKeyboardRemove, FSInputFile,
-)
-from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import (
+    FSInputFile, KeyboardButton, Message,
+    ReplyKeyboardMarkup, ReplyKeyboardRemove,
+)
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 
-# ── Logging ──────────────────────────────────────────────────────────────────
+# ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-logger = logging.getLogger("cv_mk")
+log = logging.getLogger("cv_mk")
 
-# ── Config ───────────────────────────────────────────────────────────────────
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN topilmadi! Render > Environment Variables ga qo'ying.")
+# ── Config ────────────────────────────────────────────────────────────────────
+TOKEN      = os.environ["BOT_TOKEN"]
+RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+WH_PATH    = f"/wh/{TOKEN[-10:]}"
 
-BASE_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = BASE_DIR / "output"
-OUTPUT_DIR.mkdir(exist_ok=True)
+OUT_DIR = Path(__file__).parent / "output"
+OUT_DIR.mkdir(exist_ok=True)
 
-RENDER_URL   = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
-WEBHOOK_PATH = f"/tg/{BOT_TOKEN[-12:]}"
+# ── Font (installed via apt-get in build command) ─────────────────────────────
+def _load_font() -> str:
+    for p in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    ]:
+        if Path(p).exists():
+            try:
+                pdfmetrics.registerFont(TTFont("CF", p))
+                log.info("Font yuklandi: %s", p)
+                return "CF"
+            except Exception:
+                pass
+    log.warning("Font topilmadi — Helvetica ishlatiladi (Kirill ko'rinmasligi mumkin)")
+    return "Helvetica"
+
+FONT = _load_font()
 
 # ── Bot / Dispatcher ──────────────────────────────────────────────────────────
-bot = Bot(token=BOT_TOKEN)
+bot = Bot(token=TOKEN)
 dp  = Dispatcher(storage=MemoryStorage())
 
-# ── FSM States ───────────────────────────────────────────────────────────────
+# ── FSM States ────────────────────────────────────────────────────────────────
 class CV(StatesGroup):
-    lang           = State()
-    design         = State()
-    full_name      = State()
-    job            = State()
-    custom_job     = State()
-    phone          = State()
-    email          = State()
-    address        = State()
-    photo          = State()
-    summary        = State()
-    experience     = State()
-    education      = State()
-    custom_edu     = State()
-    skills         = State()
-    languages      = State()
+    lang             = State()
+    design           = State()
+    full_name        = State()
+    job              = State()
+    job_custom       = State()
+    phone            = State()
+    email            = State()
+    address          = State()
+    photo            = State()
+    summary          = State()
+    experience       = State()
+    education        = State()
+    education_custom = State()
+    skills           = State()
+    languages        = State()
 
 # ── Static data ───────────────────────────────────────────────────────────────
-LANG_BUTTONS = ["🇺🇿 O'zbek", "🇷🇺 Русский", "🇬🇧 English"]
-LANG_MAP     = {"🇺🇿 O'zbek": "uz", "🇷🇺 Русский": "ru", "🇬🇧 English": "en"}
+LANG_BTNS = ["🇺🇿 O'zbek", "🇷🇺 Русский", "🇬🇧 English"]
+LANG_MAP   = {"🇺🇿 O'zbek": "uz", "🇷🇺 Русский": "ru", "🇬🇧 English": "en"}
 
-DESIGN_KEYS = ["⬜ Minimalist", "🏢 Corporate", "🎨 Modern", "💎 Premium"]
+DESIGN_BTNS = ["⬜ Minimalist", "🏢 Corporate", "🎨 Modern", "💎 Premium"]
 DESIGN_MAP  = {
     "⬜ Minimalist": "minimalist",
     "🏢 Corporate":  "corporate",
@@ -76,61 +93,61 @@ DESIGN_MAP  = {
 }
 
 JOBS = {
-    "uz": ["🧱 Kafelchi","🔨 Quruvchi","🎨 Malyar","🧩 Gipsokartonchi",
-           "⚡ Elektrik","🚰 Santexnik","🚗 Haydovchi","🚕 Taksi haydovchisi",
-           "📦 Omborchi","👨‍🍳 Oshpaz","✏️ Boshqa kasb"],
-    "ru": ["🧱 Плиточник","🔨 Строитель","🎨 Маляр","🧩 Гипсокартонщик",
-           "⚡ Электрик","🚰 Сантехник","🚗 Водитель","🚕 Таксист",
-           "📦 Складской работник","👨‍🍳 Повар","✏️ Другая профессия"],
-    "en": ["🧱 Tiler","🔨 Builder","🎨 Painter","🧩 Drywall Worker",
-           "⚡ Electrician","🚰 Plumber","🚗 Driver","🚕 Taxi Driver",
-           "📦 Warehouse Worker","👨‍🍳 Cook","✏️ Other profession"],
+    "uz": ["🧱 Kafelchi", "🔨 Quruvchi", "🎨 Malyar", "🧩 Gipsokartonchi",
+           "⚡ Elektrik", "🚰 Santexnik", "🚗 Haydovchi", "🚕 Taksi haydovchisi",
+           "📦 Omborchi", "👨‍🍳 Oshpaz", "🧹 Tozalovchi", "💻 IT mutaxassisi",
+           "👷 Usta", "✏️ Boshqa kasb"],
+    "ru": ["🧱 Плиточник", "🔨 Строитель", "🎨 Маляр", "🧩 Гипсокартонщик",
+           "⚡ Электрик", "🚰 Сантехник", "🚗 Водитель", "🚕 Таксист",
+           "📦 Складской работник", "👨‍🍳 Повар", "🧹 Уборщик", "💻 IT специалист",
+           "👷 Мастер", "✏️ Другая профессия"],
+    "en": ["🧱 Tiler", "🔨 Builder", "🎨 Painter", "🧩 Drywall Worker",
+           "⚡ Electrician", "🚰 Plumber", "🚗 Driver", "🚕 Taxi Driver",
+           "📦 Warehouse Worker", "👨‍🍳 Cook", "🧹 Cleaner", "💻 IT Specialist",
+           "👷 Craftsman", "✏️ Other profession"],
 }
 
 EXPERIENCE = {
-    "uz": ["🔹 Tajribasiz","🔹 1–3 yil","🔹 3–5 yil","🔹 5–10 yil","🔹 10+ yil"],
-    "ru": ["🔹 Без опыта","🔹 1–3 года","🔹 3–5 лет","🔹 5–10 лет","🔹 10+ лет"],
-    "en": ["🔹 No experience","🔹 1–3 years","🔹 3–5 years","🔹 5–10 years","🔹 10+ years"],
+    "uz": ["Tajribasiz", "1–3 yil", "3–5 yil", "5–10 yil", "10+ yil"],
+    "ru": ["Без опыта", "1–3 года", "3–5 лет", "5–10 лет", "10+ лет"],
+    "en": ["No experience", "1–3 years", "3–5 years", "5–10 years", "10+ years"],
 }
 
 EDUCATION = {
-    "uz": ["🏫 O'rta maktab","🏢 Kollej / Litsey","🎓 Bakalavr","🎓 Magistr","✏️ Boshqa"],
-    "ru": ["🏫 Средняя школа","🏢 Колледж / Лицей","🎓 Бакалавр","🎓 Магистр","✏️ Другое"],
-    "en": ["🏫 Secondary School","🏢 College / Lyceum","🎓 Bachelor","🎓 Master","✏️ Other"],
+    "uz": ["🏫 Maktab", "🏢 Kollej / Litsey", "🎓 Bakalavr", "🎓 Magistr", "✏️ Boshqa"],
+    "ru": ["🏫 Школа", "🏢 Колледж / Лицей", "🎓 Бакалавр", "🎓 Магистр", "✏️ Другое"],
+    "en": ["🏫 School", "🏢 College / Lyceum", "🎓 Bachelor", "🎓 Master", "✏️ Other"],
 }
 
 # ── Translations ──────────────────────────────────────────────────────────────
 T = {
     "uz": {
-        "welcome":      "👋 Salom! CV_MK botiga xush kelibsiz.\n\n🌍 Tilni tanlang:",
-        "choose_design":"🎨 CV dizaynini tanlang:",
-        "ask_name":     "👤 Ism va familiyangizni yozing:",
-        "name_short":   "⚠️ Ism juda qisqa. Qaytadan yozing:",
-        "ask_job":      "💼 Kasbingizni tanlang:",
-        "ask_custom_job":"✏️ Kasbingizni yozing:",
-        "ask_phone":    "📞 Telefon raqamingiz:",
-        "ask_email":    "📧 Email manzilingiz:",
-        "ask_address":  "📍 Manzilingiz (shahar, mamlakat):",
-        "ask_photo":    "📷 Foto yuboring yoki «O'tkazib yuborish» tugmasini bosing:",
-        "ask_summary":  "📝 O'zingiz haqingizda qisqacha yozing:",
-        "ask_exp":      "🏢 Ish tajribangizni tanlang:",
-        "ask_edu":      "🎓 Ta'lim darajangizni tanlang:",
-        "ask_custom_edu":"✏️ Ta'limingizni yozing:",
-        "ask_skills":   "🛠 Ko'nikmalaringizni yozing (vergul bilan):",
-        "ask_langs":    "🌐 Qaysi tillarni bilasiz? (vergul bilan):",
-        "creating":     "⏳ CV tayyorlanmoqda...",
-        "pdf_ready":    "✅ PDF CV tayyor!",
-        "html_ready":   "🌐 HTML CV tayyor! (Brauzerda ochish uchun yuklab oling)",
-        "done":         "🔄 Yangi CV yaratish uchun /start bosing.",
-        "cancelled":    "❌ Bekor qilindi. Boshlash uchun /start bosing.",
-        "error":        "❌ Xatolik yuz berdi. Qaytadan urinib ko'ring: /start",
-        "skip":         "⏭ O'tkazib yuborish",
-        "cancel":       "❌ Bekor qilish",
-        "wrong_design": "⚠️ Iltimos, quyidagi tugmalardan birini tanlang:",
-        "wrong_job":    "⚠️ Iltimos, quyidagi kasblardan birini tanlang:",
-        "wrong_exp":    "⚠️ Iltimos, tajriba darajasini tanlang:",
-        "wrong_edu":    "⚠️ Iltimos, ta'lim darajasini tanlang:",
-        "footer":       "CV_MK Bot tomonidan yaratildi",
+        "welcome":    "👋 Salom! <b>CV_MK</b> botiga xush kelibsiz.\n\nMen sizga professional CV yaratishga yordam beraman.\n\n🌍 Tilni tanlang:",
+        "design":     "🎨 CV dizaynini tanlang:",
+        "name":       "👤 Ism va familiyangizni yozing:",
+        "name_short": "⚠️ Ism juda qisqa. Qaytadan yozing:",
+        "job":        "💼 Kasbingizni tanlang:",
+        "job_custom": "✏️ Kasbingizni yozing:",
+        "phone":      "📞 Telefon raqamingiz:",
+        "email":      "📧 Email manzilingiz:",
+        "address":    "📍 Manzilingiz (shahar, mamlakat):",
+        "photo":      "📸 Fotosuratingizni yuboring yoki o'tkazib yuboring:",
+        "summary":    "📝 O'zingiz haqida qisqacha yozing (2–3 jumla):",
+        "experience": "🏢 Ish tajribangizni tanlang:",
+        "education":  "🎓 Ta'lim darajangizni tanlang:",
+        "edu_custom": "✏️ Ta'limingizni yozing:",
+        "skills":     "🛠 Ko'nikmalaringizni yozing (vergul bilan):\nMasalan: Kafel, Suvoq, Gipsokarton",
+        "langs":      "🌐 Qaysi tillarni bilasiz? (vergul bilan):\nMasalan: O'zbek, Rus",
+        "creating":   "⏳ CV tayyorlanmoqda...",
+        "pdf_ready":  "✅ PDF CV tayyor!",
+        "html_ready": "🌐 HTML CV tayyor! Brauzerda ochish uchun yuklab oling.",
+        "done":       "✅ CV tayyor!\n\n🔄 Yangi CV yaratish uchun /start bosing.",
+        "cancelled":  "❌ Bekor qilindi.\n\n/start — qayta boshlash",
+        "error":      "❌ Xatolik yuz berdi. Qaytadan urining: /start",
+        "skip":       "⏭️ O'tkazib yuborish",
+        "cancel":     "❌ Bekor qilish",
+        "wrong":      "⚠️ Iltimos, tugmalardan birini tanlang:",
+        "help":       "ℹ️ <b>CV_MK Bot</b> — professional CV yaratish boti\n\n/start — Yangi CV boshlash\n/cancel — Bekor qilish\n/help — Yordam",
         "labels": {
             "summary":    "O'zim haqimda",
             "experience": "Ish tajribasi",
@@ -140,38 +157,36 @@ T = {
             "phone":      "Telefon",
             "email":      "Email",
             "address":    "Manzil",
+            "footer":     "CV_MK Bot tomonidan yaratildi",
         },
     },
     "ru": {
-        "welcome":      "👋 Привет! Добро пожаловать в CV_MK бот.\n\n🌍 Выберите язык:",
-        "choose_design":"🎨 Выберите дизайн CV:",
-        "ask_name":     "👤 Напишите имя и фамилию:",
-        "name_short":   "⚠️ Имя слишком короткое. Напишите снова:",
-        "ask_job":      "💼 Выберите профессию:",
-        "ask_custom_job":"✏️ Напишите вашу профессию:",
-        "ask_phone":    "📞 Ваш номер телефона:",
-        "ask_email":    "📧 Ваш email:",
-        "ask_address":  "📍 Ваш адрес (город, страна):",
-        "ask_photo":    "📷 Отправьте фото или нажмите «Пропустить»:",
-        "ask_summary":  "📝 Кратко напишите о себе:",
-        "ask_exp":      "🏢 Выберите опыт работы:",
-        "ask_edu":      "🎓 Выберите уровень образования:",
-        "ask_custom_edu":"✏️ Напишите ваше образование:",
-        "ask_skills":   "🛠 Напишите навыки (через запятую):",
-        "ask_langs":    "🌐 Какие языки вы знаете? (через запятую):",
-        "creating":     "⏳ CV создаётся...",
-        "pdf_ready":    "✅ PDF CV готов!",
-        "html_ready":   "🌐 HTML CV готов! (Скачайте, чтобы открыть в браузере)",
-        "done":         "🔄 Чтобы создать новое CV, нажмите /start.",
-        "cancelled":    "❌ Отменено. Нажмите /start для начала.",
-        "error":        "❌ Произошла ошибка. Попробуйте снова: /start",
-        "skip":         "⏭ Пропустить",
-        "cancel":       "❌ Отмена",
-        "wrong_design": "⚠️ Пожалуйста, выберите один из вариантов ниже:",
-        "wrong_job":    "⚠️ Пожалуйста, выберите профессию из списка:",
-        "wrong_exp":    "⚠️ Пожалуйста, выберите уровень опыта:",
-        "wrong_edu":    "⚠️ Пожалуйста, выберите уровень образования:",
-        "footer":       "Создано CV_MK Bot",
+        "welcome":    "👋 Привет! Добро пожаловать в <b>CV_MK</b> бот.\n\nЯ помогу создать профессиональное резюме.\n\n🌍 Выберите язык:",
+        "design":     "🎨 Выберите дизайн резюме:",
+        "name":       "👤 Напишите имя и фамилию:",
+        "name_short": "⚠️ Имя слишком короткое. Напишите снова:",
+        "job":        "💼 Выберите профессию:",
+        "job_custom": "✏️ Напишите вашу профессию:",
+        "phone":      "📞 Ваш номер телефона:",
+        "email":      "📧 Ваш email:",
+        "address":    "📍 Ваш адрес (город, страна):",
+        "photo":      "📸 Отправьте фото или пропустите:",
+        "summary":    "📝 Кратко о себе (2–3 предложения):",
+        "experience": "🏢 Выберите опыт работы:",
+        "education":  "🎓 Выберите уровень образования:",
+        "edu_custom": "✏️ Напишите ваше образование:",
+        "skills":     "🛠 Напишите навыки (через запятую):\nНапример: Плитка, Штукатурка",
+        "langs":      "🌐 Какие языки знаете? (через запятую):\nНапример: Русский, Узбекский",
+        "creating":   "⏳ Создаём резюме...",
+        "pdf_ready":  "✅ PDF резюме готово!",
+        "html_ready": "🌐 HTML резюме готово! Скачайте, чтобы открыть в браузере.",
+        "done":       "✅ Резюме готово!\n\n🔄 Новое резюме — /start",
+        "cancelled":  "❌ Отменено.\n\n/start — начать заново",
+        "error":      "❌ Произошла ошибка. Попробуйте снова: /start",
+        "skip":       "⏭️ Пропустить",
+        "cancel":     "❌ Отмена",
+        "wrong":      "⚠️ Пожалуйста, выберите один из вариантов:",
+        "help":       "ℹ️ <b>CV_MK Bot</b> — бот для создания резюме\n\n/start — Новое CV\n/cancel — Отмена\n/help — Помощь",
         "labels": {
             "summary":    "Обо мне",
             "experience": "Опыт работы",
@@ -181,40 +196,38 @@ T = {
             "phone":      "Телефон",
             "email":      "Email",
             "address":    "Адрес",
+            "footer":     "Создано CV_MK Bot",
         },
     },
     "en": {
-        "welcome":      "👋 Hello! Welcome to CV_MK bot.\n\n🌍 Choose your language:",
-        "choose_design":"🎨 Choose a CV design:",
-        "ask_name":     "👤 Enter your full name:",
-        "name_short":   "⚠️ Name is too short. Please write again:",
-        "ask_job":      "💼 Choose your profession:",
-        "ask_custom_job":"✏️ Write your profession:",
-        "ask_phone":    "📞 Your phone number:",
-        "ask_email":    "📧 Your email address:",
-        "ask_address":  "📍 Your address (city, country):",
-        "ask_photo":    "📷 Send a photo or press «Skip»:",
-        "ask_summary":  "📝 Write a short professional summary:",
-        "ask_exp":      "🏢 Choose your work experience:",
-        "ask_edu":      "🎓 Choose your education level:",
-        "ask_custom_edu":"✏️ Write your education:",
-        "ask_skills":   "🛠 Write your skills (comma-separated):",
-        "ask_langs":    "🌐 Languages you know (comma-separated):",
-        "creating":     "⏳ Creating your CV...",
-        "pdf_ready":    "✅ PDF CV is ready!",
-        "html_ready":   "🌐 HTML CV is ready! (Download to open in browser)",
-        "done":         "🔄 Press /start to create another CV.",
-        "cancelled":    "❌ Cancelled. Press /start to begin.",
-        "error":        "❌ An error occurred. Please try again: /start",
-        "skip":         "⏭ Skip",
-        "cancel":       "❌ Cancel",
-        "wrong_design": "⚠️ Please choose one of the options below:",
-        "wrong_job":    "⚠️ Please choose a profession from the list:",
-        "wrong_exp":    "⚠️ Please choose an experience level:",
-        "wrong_edu":    "⚠️ Please choose an education level:",
-        "footer":       "Created by CV_MK Bot",
+        "welcome":    "👋 Hello! Welcome to <b>CV_MK</b> bot.\n\nI'll help you create a professional CV.\n\n🌍 Choose your language:",
+        "design":     "🎨 Choose a CV design:",
+        "name":       "👤 Enter your full name:",
+        "name_short": "⚠️ Name is too short. Please write again:",
+        "job":        "💼 Choose your profession:",
+        "job_custom": "✏️ Write your profession:",
+        "phone":      "📞 Your phone number:",
+        "email":      "📧 Your email address:",
+        "address":    "📍 Your address (city, country):",
+        "photo":      "📸 Send a photo or skip:",
+        "summary":    "📝 Write a short professional summary (2–3 sentences):",
+        "experience": "🏢 Choose your work experience:",
+        "education":  "🎓 Choose your education level:",
+        "edu_custom": "✏️ Write your education:",
+        "skills":     "🛠 Write your skills (comma-separated):\nExample: Tiling, Plastering",
+        "langs":      "🌐 Languages you know (comma-separated):\nExample: Uzbek, Russian",
+        "creating":   "⏳ Creating your CV...",
+        "pdf_ready":  "✅ PDF CV is ready!",
+        "html_ready": "🌐 HTML CV is ready! Download to open in browser.",
+        "done":       "✅ CV is ready!\n\n🔄 Press /start for a new CV.",
+        "cancelled":  "❌ Cancelled.\n\n/start — start over",
+        "error":      "❌ An error occurred. Try again: /start",
+        "skip":       "⏭️ Skip",
+        "cancel":     "❌ Cancel",
+        "wrong":      "⚠️ Please choose one of the options:",
+        "help":       "ℹ️ <b>CV_MK Bot</b> — professional CV builder\n\n/start — New CV\n/cancel — Cancel\n/help — Help",
         "labels": {
-            "summary":    "Professional Summary",
+            "summary":    "About Me",
             "experience": "Work Experience",
             "education":  "Education",
             "skills":     "Skills",
@@ -222,588 +235,309 @@ T = {
             "phone":      "Phone",
             "email":      "Email",
             "address":    "Address",
+            "footer":     "Created by CV_MK Bot",
         },
     },
 }
 
-# ── Keyboard helpers ──────────────────────────────────────────────────────────
-def kb(items: list[str], cols: int = 2) -> ReplyKeyboardMarkup:
-    rows = []
-    for i in range(0, len(items), cols):
-        rows.append([KeyboardButton(text=x) for x in items[i:i + cols]])
-    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, one_time_keyboard=True)
+# ── Keyboards ─────────────────────────────────────────────────────────────────
+def _kb(items: list[str], cols: int = 2) -> ReplyKeyboardMarkup:
+    rows = [items[i:i + cols] for i in range(0, len(items), cols)]
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=t) for t in row] for row in rows],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
 
-def kb_lang()         : return kb(LANG_BUTTONS, cols=1)
-def kb_design()       : return kb(DESIGN_KEYS,  cols=2)
-def kb_jobs(l)        : return kb(JOBS[l],       cols=2)
-def kb_exp(l)         : return kb(EXPERIENCE[l], cols=1)
-def kb_edu(l)         : return kb(EDUCATION[l],  cols=1)
-def kb_skip_cancel(l) : return kb([T[l]["skip"], T[l]["cancel"]], cols=2)
-def kb_cancel(l)      : return kb([T[l]["cancel"]], cols=1)
+def kb_lang():         return _kb(LANG_BTNS, cols=1)
+def kb_design():       return _kb(DESIGN_BTNS, cols=2)
+def kb_jobs(l):        return _kb(JOBS[l], cols=2)
+def kb_exp(l):         return _kb(EXPERIENCE[l], cols=1)
+def kb_edu(l):         return _kb(EDUCATION[l], cols=1)
+def kb_cancel(l):      return _kb([T[l]["cancel"]], cols=1)
+def kb_skip_cancel(l): return _kb([T[l]["skip"], T[l]["cancel"]], cols=2)
 
-# ── Text utilities ─────────────────────────────────────────────────────────────
-def is_cancel(text: str, lang: str) -> bool:
-    cancel_words = {"bekor", "отмена", "cancel", "❌"}
-    t = (text or "").lower()
-    return any(w in t for w in cancel_words) or text == T[lang]["cancel"]
+# ── Helpers ───────────────────────────────────────────────────────────────────
+_EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FFFF\U00002600-\U000027FF\U0000FE00-\U0000FE0F\U0001FA00-\U0001FAFF]+",
+    re.UNICODE,
+)
 
-def is_skip(text: str, lang: str) -> bool:
-    skip_words = {"skip", "пропустить", "otkazib", "o'tkazib", "⏭"}
-    t = (text or "").lower().replace("'","'").replace("ʻ","'")
-    return any(w in t for w in skip_words) or text == T[lang]["skip"]
-
-def clean_emoji(text: str) -> str:
-    for e in ["🧱","🔨","🎨","🧩","⚡","🚰","🚗","🚕","📦","👨‍🍳",
-              "🔹","🏫","🏢","🎓","✏️","⏭","⬜","💎"]:
-        text = (text or "").replace(e, "")
-    return text.strip()
+def uid() -> str:
+    return uuid.uuid4().hex[:12]
 
 def safe(v) -> str:
     return str(v or "").strip()
 
-def wrap(text: str, width: int = 78) -> list[str]:
-    lines = []
-    for part in safe(text).split("\n"):
-        lines.extend(textwrap.wrap(part, width=width) or [""])
-    return lines
+def wraptext(text: str, width: int) -> list[str]:
+    result = []
+    for line in safe(text).split("\n"):
+        result.extend(textwrap.wrap(line, width) or [""])
+    return result
 
-def uid() -> str:
-    return uuid.uuid4().hex
+def is_cancel(text: str, lang: str) -> bool:
+    t = (text or "").lower()
+    return any(w in t for w in ["bekor", "отмена", "cancel", "❌"]) or text == T[lang]["cancel"]
 
-def cleanup(*paths: Path):
+def is_skip(text: str, lang: str) -> bool:
+    t = (text or "").lower()
+    return any(w in t for w in ["skip", "пропустить", "otkazib", "⏭"]) or text == T[lang]["skip"]
+
+def strip_emoji(text: str) -> str:
+    return _EMOJI_RE.sub("", text or "").strip(" –—-")
+
+def cleanup(*paths):
     for p in paths:
         try:
             if p:
                 Path(p).unlink(missing_ok=True)
-        except Exception as e:
-            logger.warning("Fayl o'chirilmadi: %s — %s", p, e)
+        except Exception:
+            pass
 
-# ── Font ───────────────────────────────────────────────────────────────────────
-def load_font() -> str:
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-    ]
-    for path in candidates:
-        if Path(path).exists():
-            try:
-                pdfmetrics.registerFont(TTFont("CVFont", path))
-                logger.info("Font yuklandi: %s", path)
-                return "CVFont"
-            except Exception:
-                continue
-    logger.warning("Maxsus font topilmadi, Helvetica ishlatiladi.")
-    return "Helvetica"
-
-FONT = load_font()
-
-# ── Photo → base64 ────────────────────────────────────────────────────────────
 def photo_b64(path: str) -> str:
     try:
         p = Path(path)
         if p.exists():
-            data = base64.b64encode(p.read_bytes()).decode()
             ext  = p.suffix.lower().lstrip(".")
-            mime = {"jpg":"jpeg","jpeg":"jpeg","png":"png","webp":"webp"}.get(ext,"jpeg")
-            return f"data:image/{mime};base64,{data}"
-    except Exception as e:
-        logger.warning("Foto base64 xatosi: %s", e)
+            mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}.get(ext, "jpeg")
+            return f"data:image/{mime};base64,{base64.b64encode(p.read_bytes()).decode()}"
+    except Exception:
+        pass
     return ""
 
 # ── HTML Generator ────────────────────────────────────────────────────────────
 THEMES = {
-    "minimalist": {"bg":"#ffffff","sidebar":"#f1f5f9","text":"#111827","accent":"#2563eb","card":"#f8fafc"},
-    "corporate":  {"bg":"#f8fafc","sidebar":"#e2e8f0","text":"#0f172a","accent":"#1d4ed8","card":"#ffffff"},
-    "modern":     {"bg":"#0f172a","sidebar":"#1e293b","text":"#f1f5f9","accent":"#ec4899","card":"#1e293b"},
-    "premium":    {"bg":"#080b18","sidebar":"#0f1629","text":"#f5f0e8","accent":"#f59e0b","card":"#0f1629"},
+    "minimalist": {"bg": "#ffffff", "sidebar": "#f1f5f9", "text": "#111827", "accent": "#2563eb"},
+    "corporate":  {"bg": "#f8fafc", "sidebar": "#e2e8f0", "text": "#0f172a", "accent": "#1d4ed8"},
+    "modern":     {"bg": "#0f172a", "sidebar": "#1e293b", "text": "#f1f5f9", "accent": "#ec4899"},
+    "premium":    {"bg": "#080b18", "sidebar": "#0f1629", "text": "#f5f0e8", "accent": "#f59e0b"},
 }
 
 def generate_html(data: dict, fid: str) -> Path:
-    import html as hmod
-    lang   = data.get("lang", "uz")
-    lbl    = T[lang]["labels"]
-    design = data.get("design", "minimalist")
-    t      = THEMES.get(design, THEMES["minimalist"])
+    import html as h
+    lang = data.get("lang", "uz")
+    lbl  = T[lang]["labels"]
+    th   = THEMES.get(data.get("design", "minimalist"), THEMES["minimalist"])
 
-    def esc(v): return hmod.escape(safe(v))
+    def e(v): return h.escape(safe(v))
+    def tags(v: str) -> str:
+        return "".join(
+            f'<span class="tag">{e(x.strip())}</span>'
+            for x in safe(v).replace(",", "\n").split("\n") if x.strip()
+        )
 
     photo_tag = ""
     if data.get("photo_path"):
-        src = photo_b64(data["photo_path"])
-        if src:
-            photo_tag = f'<img class="photo" src="{src}" alt="photo">'
-    if not photo_tag:
-        photo_tag = '<div class="photo-placeholder">👤</div>'
+        b64 = photo_b64(data["photo_path"])
+        if b64:
+            photo_tag = f'<img class="photo" src="{b64}" alt="photo">'
+    photo_tag = photo_tag or '<div class="photo-ph">👤</div>'
 
-    def tags(text: str) -> str:
-        parts = safe(text).replace(",", "\n").split("\n")
-        return "".join(
-            f'<span class="tag">{esc(s.strip())}</span>'
-            for s in parts if s.strip()
-        )
-
-    html = f"""<!DOCTYPE html>
+    html_out = f"""<!DOCTYPE html>
 <html lang="{lang}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{esc(data.get("full_name"))} — CV</title>
+<title>{e(data.get("full_name"))} — CV</title>
 <style>
 *,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
-body{{background:{t["bg"]};font-family:'Segoe UI',Arial,sans-serif;color:{t["text"]};min-height:100vh}}
-.wrap{{max-width:860px;margin:32px auto;background:{t["bg"]};border-radius:20px;
-  box-shadow:0 30px 80px rgba(0,0,0,.3);overflow:hidden;display:grid;grid-template-columns:260px 1fr}}
-.side{{background:{t["sidebar"]};padding:36px 24px;display:flex;flex-direction:column;gap:24px}}
-.photo{{width:120px;height:120px;border-radius:50%;object-fit:cover;border:4px solid {t["accent"]};display:block;margin:0 auto}}
-.photo-placeholder{{width:120px;height:120px;border-radius:50%;background:{t["accent"]}22;
-  border:3px dashed {t["accent"]};display:flex;align-items:center;justify-content:center;font-size:44px;margin:0 auto}}
-.s-sec h3{{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:{t["accent"]};margin-bottom:8px;font-weight:700}}
-.s-sec .val{{font-size:13px;line-height:1.8;opacity:.85;word-break:break-all}}
-.tag{{display:inline-block;background:{t["accent"]}22;color:{t["accent"]};border-radius:8px;
-  padding:3px 10px;font-size:12px;margin:2px;font-weight:500}}
-.main{{padding:40px 36px;display:flex;flex-direction:column;gap:22px}}
-.hdr{{border-bottom:3px solid {t["accent"]};padding-bottom:18px}}
-.hdr h1{{font-size:30px;font-weight:800;letter-spacing:-.5px}}
-.hdr .role{{color:{t["accent"]};font-size:16px;font-weight:600;margin-top:6px}}
-.sec h2{{font-size:13px;letter-spacing:.10em;text-transform:uppercase;color:{t["accent"]};
-  font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}}
-.sec h2::after{{content:"";flex:1;height:1px;background:{t["accent"]}44}}
-.sec p{{font-size:14px;line-height:1.75;white-space:pre-line;opacity:.9}}
-.foot{{text-align:center;font-size:11px;opacity:.4;padding:14px 0 0;border-top:1px solid {t["accent"]}22}}
-@media(max-width:680px){{.wrap{{grid-template-columns:1fr}}.side{{padding:24px 18px}}.main{{padding:24px 18px}}}}
-@media print{{body{{background:white}}.wrap{{box-shadow:none;margin:0;border-radius:0}}}}
-</style>
-</head>
-<body>
-<div class="wrap">
+body{{background:{th["bg"]};font-family:'Segoe UI',Arial,sans-serif;color:{th["text"]};min-height:100vh}}
+.wrap{{max-width:860px;margin:32px auto;background:{th["bg"]};border-radius:16px;
+  box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden;display:grid;grid-template-columns:250px 1fr}}
+.side{{background:{th["sidebar"]};padding:32px 20px;display:flex;flex-direction:column;gap:20px}}
+.photo{{width:110px;height:110px;border-radius:50%;object-fit:cover;
+  border:3px solid {th["accent"]};display:block;margin:0 auto}}
+.photo-ph{{width:110px;height:110px;border-radius:50%;background:{th["accent"]}20;
+  border:2px dashed {th["accent"]};display:flex;align-items:center;justify-content:center;
+  font-size:40px;margin:0 auto}}
+.sb h3{{font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:{th["accent"]};margin-bottom:6px;font-weight:700}}
+.sb .val{{font-size:12px;line-height:1.7;opacity:.85;word-break:break-all}}
+.tag{{display:inline-block;background:{th["accent"]}20;color:{th["accent"]};
+  border-radius:6px;padding:2px 8px;font-size:11px;margin:2px;font-weight:500}}
+.main{{padding:36px 32px;display:flex;flex-direction:column;gap:20px}}
+.hdr{{border-bottom:2px solid {th["accent"]};padding-bottom:16px}}
+.hdr h1{{font-size:26px;font-weight:800}}
+.hdr .role{{color:{th["accent"]};font-size:14px;font-weight:600;margin-top:4px}}
+.sec h2{{font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:{th["accent"]};font-weight:700;margin-bottom:8px;
+  display:flex;align-items:center;gap:6px}}
+.sec h2::after{{content:"";flex:1;height:1px;background:{th["accent"]}40}}
+.sec p{{font-size:13px;line-height:1.7;white-space:pre-line;opacity:.9}}
+.foot{{text-align:center;font-size:10px;opacity:.4;
+  padding:12px 0 0;border-top:1px solid {th["accent"]}20}}
+@media(max-width:640px){{.wrap{{grid-template-columns:1fr}}}}
+@media print{{body{{background:#fff}}.wrap{{box-shadow:none;margin:0;border-radius:0}}}}
+</style></head>
+<body><div class="wrap">
 <aside class="side">
   {photo_tag}
-  <div class="s-sec"><h3>📞 {lbl["phone"]}</h3><div class="val">{esc(data.get("phone","—"))}</div></div>
-  <div class="s-sec"><h3>📧 {lbl["email"]}</h3><div class="val">{esc(data.get("email","—"))}</div></div>
-  <div class="s-sec"><h3>📍 {lbl["address"]}</h3><div class="val">{esc(data.get("address","—"))}</div></div>
-  <div class="s-sec"><h3>🌐 {lbl["languages"]}</h3><div>{tags(data.get("languages",""))}</div></div>
-  <div class="s-sec"><h3>🛠 {lbl["skills"]}</h3><div>{tags(data.get("skills",""))}</div></div>
+  <div class="sb"><h3>📞 {lbl["phone"]}</h3><div class="val">{e(data.get("phone","—"))}</div></div>
+  <div class="sb"><h3>📧 {lbl["email"]}</h3><div class="val">{e(data.get("email","—"))}</div></div>
+  <div class="sb"><h3>📍 {lbl["address"]}</h3><div class="val">{e(data.get("address","—"))}</div></div>
+  <div class="sb"><h3>🌐 {lbl["languages"]}</h3><div>{tags(data.get("languages",""))}</div></div>
+  <div class="sb"><h3>🛠 {lbl["skills"]}</h3><div>{tags(data.get("skills",""))}</div></div>
 </aside>
 <main class="main">
   <div class="hdr">
-    <h1>{esc(data.get("full_name","—"))}</h1>
-    <div class="role">{esc(data.get("job","—"))}</div>
+    <h1>{e(data.get("full_name","—"))}</h1>
+    <div class="role">{e(data.get("job","—"))}</div>
   </div>
-  <div class="sec"><h2>{lbl["summary"]}</h2><p>{esc(data.get("summary","—"))}</p></div>
-  <div class="sec"><h2>{lbl["experience"]}</h2><p>{esc(data.get("experience","—"))}</p></div>
-  <div class="sec"><h2>{lbl["education"]}</h2><p>{esc(data.get("education","—"))}</p></div>
-  <div class="foot">{T[lang]["footer"]} • {datetime.now().strftime("%d.%m.%Y")}</div>
-</main>
-</div>
-</body>
-</html>"""
+  <div class="sec"><h2>{lbl["summary"]}</h2><p>{e(data.get("summary","—"))}</p></div>
+  <div class="sec"><h2>{lbl["experience"]}</h2><p>{e(data.get("experience","—"))}</p></div>
+  <div class="sec"><h2>{lbl["education"]}</h2><p>{e(data.get("education","—"))}</p></div>
+  <div class="foot">{lbl["footer"]} • {datetime.now().strftime("%d.%m.%Y")}</div>
+</main></div></body></html>"""
 
-    path = OUTPUT_DIR / f"cv_{fid}.html"
-    path.write_text(html, encoding="utf-8")
-    return path
+    out = OUT_DIR / f"cv_{fid}.html"
+    out.write_text(html_out, encoding="utf-8")
+    return out
 
 # ── PDF Generator ─────────────────────────────────────────────────────────────
 PDF_PAL = {
-    "minimalist": {"accent":(0.15,0.39,0.92), "dark":False},
-    "corporate":  {"accent":(0.05,0.20,0.45), "dark":False},
-    "modern":     {"accent":(0.90,0.20,0.55), "dark":True},
-    "premium":    {"accent":(0.96,0.62,0.04), "dark":True},
+    "minimalist": {"accent": (0.15, 0.39, 0.92), "dark": False},
+    "corporate":  {"accent": (0.05, 0.20, 0.45), "dark": False},
+    "modern":     {"accent": (0.90, 0.20, 0.55), "dark": True},
+    "premium":    {"accent": (0.96, 0.62, 0.04), "dark": True},
 }
 
 def generate_pdf(data: dict, fid: str) -> Path:
-    path = OUTPUT_DIR / f"cv_{fid}.pdf"
-    c    = canvas.Canvas(str(path), pagesize=A4)
+    out  = OUT_DIR / f"cv_{fid}.pdf"
+    c    = canvas.Canvas(str(out), pagesize=A4)
     W, H = A4
+    lang = data.get("lang", "uz")
+    lbl  = T[lang]["labels"]
+    pal  = PDF_PAL.get(data.get("design", "minimalist"), PDF_PAL["minimalist"])
+    acc  = pal["accent"]
+    dark = pal["dark"]
 
-    lang   = data.get("lang", "uz")
-    lbl    = T[lang]["labels"]
-    design = data.get("design", "minimalist")
-    pal    = PDF_PAL.get(design, PDF_PAL["minimalist"])
-    accent = pal["accent"]
-    dark   = pal["dark"]
+    BG  = (0.04, 0.06, 0.12) if dark else (1.0, 1.0, 1.0)
+    TXT = (0.95, 0.95, 0.95) if dark else (0.07, 0.07, 0.12)
+    SBG = tuple(max(0, x - 0.06) for x in BG) if dark else (0.945, 0.953, 0.965)
+    SW  = 195
 
-    BG   = (0.04, 0.06, 0.12) if dark else (1.0,  1.0,  1.0 )
-    TXT_ = (0.95, 0.95, 0.95) if dark else (0.07, 0.07, 0.12)
+    def fill_bg():
+        c.setFillColorRGB(*BG);  c.rect(0, 0, W, H, fill=1, stroke=0)
+        c.setFillColorRGB(*SBG); c.rect(0, 0, SW, H, fill=1, stroke=0)
 
-    sidebar_w  = 200
-    sidebar_bg = tuple(max(0, x - 0.05) for x in BG) if dark else (0.945, 0.953, 0.965)
+    # Page 1 base
+    fill_bg()
+    c.setFillColorRGB(*acc); c.rect(0, H - 40, W, 40, fill=1, stroke=0)
+    c.setFillColorRGB(*SBG); c.rect(0, 0, SW, H - 40, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1); c.setFont(FONT, 11)
+    c.drawString(14, H - 26, "CV_MK BOT")
 
-    # Background
-    c.setFillColorRGB(*BG)
-    c.rect(0, 0, W, H, fill=1, stroke=0)
-
-    # Accent header bar
-    c.setFillColorRGB(*accent)
-    c.rect(0, H - 36, W, 36, fill=1, stroke=0)
-
-    # Sidebar
-    c.setFillColorRGB(*sidebar_bg)
-    c.rect(0, 0, sidebar_w, H - 36, fill=1, stroke=0)
-
-    # Header bar label
-    c.setFillColorRGB(1, 1, 1)
-    c.setFont(FONT, 10)
-    c.drawString(16, H - 23, "CV_MK BOT")
-
-    y_main = H - 66
-
-    # Name
-    c.setFillColorRGB(*TXT_)
-    c.setFont(FONT, 20)
-    c.drawString(sidebar_w + 18, y_main, safe(data.get("full_name"))[:42])
-    y_main -= 24
-
-    # Job / role
-    c.setFillColorRGB(*accent)
-    c.setFont(FONT, 12)
-    c.drawString(sidebar_w + 18, y_main, safe(data.get("job"))[:55])
-    y_main -= 20
-
-    # Divider
-    c.setStrokeColorRGB(*accent)
-    c.setLineWidth(1.2)
-    c.line(sidebar_w + 18, y_main, W - 28, y_main)
-    y_main -= 14
+    # ── Main content area ─────────────────────────────────────────────────────
+    y = H - 68
+    c.setFillColorRGB(*TXT);  c.setFont(FONT, 20)
+    c.drawString(SW + 14, y, safe(data.get("full_name"))[:40]); y -= 22
+    c.setFillColorRGB(*acc);  c.setFont(FONT, 12)
+    c.drawString(SW + 14, y, safe(data.get("job"))[:50]); y -= 16
+    c.setStrokeColorRGB(*acc); c.setLineWidth(1.2)
+    c.line(SW + 14, y, W - 20, y); y -= 14
 
     def new_page():
-        nonlocal y_main
+        nonlocal y
         c.showPage()
-        c.setFillColorRGB(*BG)
-        c.rect(0, 0, W, H, fill=1, stroke=0)
-        c.setFillColorRGB(*sidebar_bg)
-        c.rect(0, 0, sidebar_w, H, fill=1, stroke=0)
-        y_main = H - 40
+        fill_bg()
+        y = H - 40
 
-    def main_section(title: str, body: str):
-        nonlocal y_main
-        if y_main < 90:
+    def section(title: str, body: str):
+        nonlocal y
+        if y < 90:
             new_page()
-        c.setFillColorRGB(*accent)
-        c.setFont(FONT, 11)
-        c.drawString(sidebar_w + 18, y_main, title.upper())
-        y_main -= 4
-        c.setStrokeColorRGB(*accent)
-        c.setLineWidth(0.4)
-        c.line(sidebar_w + 18, y_main, W - 28, y_main)
-        y_main -= 13
-        c.setFillColorRGB(*TXT_)
-        c.setFont(FONT, 9)
-        for line in wrap(body, 68):
-            if y_main < 55:
+        c.setFillColorRGB(*acc);   c.setFont(FONT, 10)
+        c.drawString(SW + 14, y, title.upper()); y -= 4
+        c.setStrokeColorRGB(*acc); c.setLineWidth(0.4)
+        c.line(SW + 14, y, W - 20, y); y -= 13
+        c.setFillColorRGB(*TXT);   c.setFont(FONT, 9)
+        for line in wraptext(body, 66):
+            if y < 50:
                 new_page()
-                c.setFillColorRGB(*TXT_)
-                c.setFont(FONT, 9)
-            c.drawString(sidebar_w + 22, y_main, line)
-            y_main -= 13
-        y_main -= 8
+                c.setFillColorRGB(*TXT); c.setFont(FONT, 9)
+            c.drawString(SW + 18, y, line); y -= 13
+        y -= 8
 
-    main_section(lbl["summary"],    safe(data.get("summary")))
-    main_section(lbl["experience"], safe(data.get("experience")))
-    main_section(lbl["education"],  safe(data.get("education")))
+    section(lbl["summary"],    safe(data.get("summary")))
+    section(lbl["experience"], safe(data.get("experience")))
+    section(lbl["education"],  safe(data.get("education")))
 
-    # ── Sidebar content ────────────────────────────────────────────────────────
-    y_side = H - 95  # photo circle center: top = H-95+43=H-52, below header (H-36)
+    # ── Sidebar ───────────────────────────────────────────────────────────────
+    sy = H - 98       # photo circle center (top = sy+41 = H-57, below header H-40)
+    px = SW // 2
+    pr = 38
 
-    def side_title(title: str):
-        nonlocal y_side
-        if y_side < 55:
-            return
-        c.setFillColorRGB(*accent)
-        c.setFont(FONT, 8)
-        c.drawString(10, y_side, title.upper())
-        y_side -= 13
-
-    def side_text(text: str, w: int = 30):
-        nonlocal y_side
-        c.setFillColorRGB(*TXT_)
-        c.setFont(FONT, 8)
-        for line in wrap(text, w):
-            if y_side < 50:
-                break
-            c.drawString(10, y_side, line)
-            y_side -= 12
-
-    # Photo circle
-    px, py, pr = 100, y_side, 40
-    c.setFillColorRGB(*accent)
-    c.circle(px, py, pr + 3, fill=1, stroke=0)
-    c.setFillColorRGB(*sidebar_bg)
-    c.circle(px, py, pr, fill=1, stroke=0)
+    c.setFillColorRGB(*acc); c.circle(px, sy, pr + 3, fill=1, stroke=0)
+    c.setFillColorRGB(*SBG); c.circle(px, sy, pr, fill=1, stroke=0)
 
     photo_path = data.get("photo_path", "")
     if photo_path and Path(photo_path).exists():
         try:
-            from reportlab.lib.utils import ImageReader
             from PIL import Image as PILImage
-            import io
+            from reportlab.lib.utils import ImageReader
             img = PILImage.open(photo_path).convert("RGB")
-            s   = min(img.size)
-            lft = (img.width  - s) // 2
-            top = (img.height - s) // 2
-            img = img.crop((lft, top, lft + s, top + s)).resize((100, 100))
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG")
-            buf.seek(0)
-            c.drawImage(ImageReader(buf), px - pr, py - pr,
-                        width=pr*2, height=pr*2, mask="auto")
+            sz  = min(img.size)
+            lf  = (img.width - sz) // 2
+            tp  = (img.height - sz) // 2
+            img = img.crop((lf, tp, lf + sz, tp + sz)).resize((84, 84))
+            buf = io.BytesIO(); img.save(buf, format="JPEG"); buf.seek(0)
+            c.drawImage(ImageReader(buf), px - pr, sy - pr,
+                        width=pr * 2, height=pr * 2, mask="auto")
         except Exception as e:
-            logger.warning("PDF foto xatosi: %s", e)
-            c.setFillColorRGB(*TXT_)
-            c.setFont(FONT, 20)
-            c.drawCentredString(px, py - 7, "👤")
-    else:
-        c.setFillColorRGB(*TXT_)
-        c.setFont(FONT, 20)
-        c.drawCentredString(px, py - 7, "👤")
+            log.warning("PDF foto xatosi: %s", e)
 
-    y_side -= pr * 2 + 16
+    sy -= pr + 18
 
-    side_title(lbl["phone"]);     side_text(safe(data.get("phone")));    y_side -= 4
-    side_title(lbl["email"]);     side_text(safe(data.get("email")));    y_side -= 4
-    side_title(lbl["address"]);   side_text(safe(data.get("address"))); y_side -= 4
-    side_title(lbl["languages"]); side_text(safe(data.get("languages"))); y_side -= 4
-    side_title(lbl["skills"]);    side_text(safe(data.get("skills")))
+    def st(title: str):
+        nonlocal sy
+        if sy < 50:
+            return
+        c.setFillColorRGB(*acc); c.setFont(FONT, 8)
+        c.drawString(8, sy, title.upper()); sy -= 13
 
-    # Footer
-    c.setFillColorRGB(*accent)
-    c.setFont(FONT, 7)
-    c.drawString(10, 18, f"{T[lang]['footer']} • {datetime.now().strftime('%d.%m.%Y')}")
+    def sv(text: str):
+        nonlocal sy
+        c.setFillColorRGB(*TXT); c.setFont(FONT, 8)
+        for line in wraptext(text, 28):
+            if sy < 45:
+                break
+            c.drawString(8, sy, line); sy -= 11
 
+    st(lbl["phone"]);     sv(safe(data.get("phone")));     sy -= 4
+    st(lbl["email"]);     sv(safe(data.get("email")));     sy -= 4
+    st(lbl["address"]);   sv(safe(data.get("address")));   sy -= 4
+    st(lbl["languages"]); sv(safe(data.get("languages"))); sy -= 4
+    st(lbl["skills"]);    sv(safe(data.get("skills")))
+
+    c.setFillColorRGB(*acc); c.setFont(FONT, 7)
+    c.drawString(8, 14, f"{lbl['footer']} • {datetime.now().strftime('%d.%m.%Y')}")
     c.save()
-    return path
+    return out
 
-# ── CV finalize ───────────────────────────────────────────────────────────────
+# ── Finalize: CV yuborish ─────────────────────────────────────────────────────
 async def finalize(msg: Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang", "uz")
     fid  = uid()
+    pdf_path = html_path = None
 
     await msg.answer(T[lang]["creating"], reply_markup=ReplyKeyboardRemove())
-
-    pdf_path  = None
-    html_path = None
     try:
         pdf_path  = generate_pdf(data, fid)
         html_path = generate_html(data, fid)
-
         await msg.answer_document(FSInputFile(pdf_path),  caption=T[lang]["pdf_ready"])
         await msg.answer_document(FSInputFile(html_path), caption=T[lang]["html_ready"])
-        await msg.answer(T[lang]["done"], reply_markup=kb_lang())
+        await msg.answer(T[lang]["done"], reply_markup=kb_lang(), parse_mode="HTML")
     except Exception as e:
-        logger.exception("CV yaratishda xatolik: %s", e)
+        log.exception("CV yaratishda xatolik: %s", e)
         await msg.answer(T[lang]["error"], reply_markup=kb_lang())
     finally:
-        to_clean = [p for p in [pdf_path, html_path] if p]
+        to_del = [p for p in [pdf_path, html_path] if p]
         if data.get("photo_path"):
-            to_clean.append(Path(data["photo_path"]))
-        cleanup(*to_clean)
+            to_del.append(Path(data["photo_path"]))
+        cleanup(*to_del)
         await state.clear()
         await state.set_state(CV.lang)
-
-# ── /start ────────────────────────────────────────────────────────────────────
-@dp.message(Command("start"))
-async def cmd_start(msg: Message, state: FSMContext):
-    try:
-        await state.clear()
-        await state.set_state(CV.lang)
-        await msg.answer(T["uz"]["welcome"], reply_markup=kb_lang())
-        logger.info("/start: user_id=%s", msg.from_user.id if msg.from_user else "?")
-    except Exception as e:
-        logger.exception("cmd_start xatosi: %s", e)
-
-# ── Til tanlash ───────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.lang), F.text.in_(LANG_BUTTONS))
-async def step_lang(msg: Message, state: FSMContext):
-    lang = LANG_MAP[msg.text]
-    await state.update_data(lang=lang)
-    await state.set_state(CV.design)
-    await msg.answer(T[lang]["choose_design"], reply_markup=kb_design())
-
-# ── Dizayn tanlash ────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.design), F.text.in_(DESIGN_KEYS))
-async def step_design(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    await state.update_data(design=DESIGN_MAP[msg.text])
-    await state.set_state(CV.full_name)
-    await msg.answer(T[lang]["ask_name"], reply_markup=kb_cancel(lang))
-
-@dp.message(StateFilter(CV.design))
-async def step_design_wrong(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text or "", lang): return await do_cancel(msg, state)
-    await msg.answer(T[lang]["wrong_design"], reply_markup=kb_design())
-
-# ── Ism familiya ─────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.full_name), F.text)
-async def step_name(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    if len(msg.text.strip()) < 2:
-        return await msg.answer(T[lang]["name_short"], reply_markup=kb_cancel(lang))
-    await state.update_data(full_name=msg.text.strip())
-    await state.set_state(CV.job)
-    await msg.answer(T[lang]["ask_job"], reply_markup=kb_jobs(lang))
-
-# ── Kasb tanlash ─────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.job), F.text)
-async def step_job(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    tl = (msg.text or "").lower()
-    if any(w in tl for w in ["boshqa", "другая", "other", "✏️"]):
-        await state.set_state(CV.custom_job)
-        return await msg.answer(T[lang]["ask_custom_job"], reply_markup=kb_cancel(lang))
-    if msg.text not in JOBS[lang]:
-        return await msg.answer(T[lang]["wrong_job"], reply_markup=kb_jobs(lang))
-    await state.update_data(job=clean_emoji(msg.text))
-    await state.set_state(CV.phone)
-    await msg.answer(T[lang]["ask_phone"], reply_markup=kb_cancel(lang))
-
-# ── Boshqa kasb ──────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.custom_job), F.text)
-async def step_custom_job(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    await state.update_data(job=msg.text.strip())
-    await state.set_state(CV.phone)
-    await msg.answer(T[lang]["ask_phone"], reply_markup=kb_cancel(lang))
-
-# ── Telefon ───────────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.phone), F.text)
-async def step_phone(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    await state.update_data(phone=msg.text.strip())
-    await state.set_state(CV.email)
-    await msg.answer(T[lang]["ask_email"], reply_markup=kb_cancel(lang))
-
-# ── Email ─────────────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.email), F.text)
-async def step_email(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    await state.update_data(email=msg.text.strip())
-    await state.set_state(CV.address)
-    await msg.answer(T[lang]["ask_address"], reply_markup=kb_cancel(lang))
-
-# ── Manzil ────────────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.address), F.text)
-async def step_address(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    await state.update_data(address=msg.text.strip())
-    await state.set_state(CV.photo)
-    await msg.answer(T[lang]["ask_photo"], reply_markup=kb_skip_cancel(lang))
-
-# ── Foto: rasm ────────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.photo), F.photo)
-async def step_photo_img(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    try:
-        file       = await bot.get_file(msg.photo[-1].file_id)
-        photo_path = OUTPUT_DIR / f"photo_{uid()}.jpg"
-        await bot.download_file(file.file_path, destination=photo_path)
-        await state.update_data(photo_path=str(photo_path))
-        logger.info("Foto saqlandi: %s", photo_path)
-    except Exception as e:
-        logger.warning("Foto yuklab bo'lmadi: %s", e)
-        await state.update_data(photo_path="")
-    await state.set_state(CV.summary)
-    await msg.answer(T[lang]["ask_summary"], reply_markup=kb_cancel(lang))
-
-# ── Foto: matn (skip / cancel) ────────────────────────────────────────────────
-@dp.message(StateFilter(CV.photo), F.text)
-async def step_photo_text(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    if is_skip(msg.text, lang):
-        await state.update_data(photo_path="")
-        await state.set_state(CV.summary)
-        return await msg.answer(T[lang]["ask_summary"], reply_markup=kb_cancel(lang))
-    await msg.answer(T[lang]["ask_photo"], reply_markup=kb_skip_cancel(lang))
-
-# ── Summary ───────────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.summary), F.text)
-async def step_summary(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    await state.update_data(summary=msg.text.strip())
-    await state.set_state(CV.experience)
-    await msg.answer(T[lang]["ask_exp"], reply_markup=kb_exp(lang))
-
-# ── Tajriba ───────────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.experience), F.text)
-async def step_exp(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    if msg.text not in EXPERIENCE[lang]:
-        return await msg.answer(T[lang]["wrong_exp"], reply_markup=kb_exp(lang))
-    await state.update_data(experience=clean_emoji(msg.text))
-    await state.set_state(CV.education)
-    await msg.answer(T[lang]["ask_edu"], reply_markup=kb_edu(lang))
-
-# ── Ta'lim ────────────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.education), F.text)
-async def step_edu(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    tl = (msg.text or "").lower()
-    if any(w in tl for w in ["boshqa", "другое", "other", "✏️"]):
-        await state.set_state(CV.custom_edu)
-        return await msg.answer(T[lang]["ask_custom_edu"], reply_markup=kb_cancel(lang))
-    if msg.text not in EDUCATION[lang]:
-        return await msg.answer(T[lang]["wrong_edu"], reply_markup=kb_edu(lang))
-    await state.update_data(education=clean_emoji(msg.text))
-    await state.set_state(CV.skills)
-    await msg.answer(T[lang]["ask_skills"], reply_markup=kb_cancel(lang))
-
-# ── Boshqa ta'lim ─────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.custom_edu), F.text)
-async def step_custom_edu(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    await state.update_data(education=msg.text.strip())
-    await state.set_state(CV.skills)
-    await msg.answer(T[lang]["ask_skills"], reply_markup=kb_cancel(lang))
-
-# ── Ko'nikmalar ───────────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.skills), F.text)
-async def step_skills(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    await state.update_data(skills=msg.text.strip())
-    await state.set_state(CV.languages)
-    await msg.answer(T[lang]["ask_langs"], reply_markup=kb_cancel(lang))
-
-# ── Tillar → finalize ─────────────────────────────────────────────────────────
-@dp.message(StateFilter(CV.languages), F.text)
-async def step_langs(msg: Message, state: FSMContext):
-    data = await state.get_data(); lang = data.get("lang", "uz")
-    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
-    await state.update_data(languages=msg.text.strip())
-    await finalize(msg, state)
-
-# ── /cancel komandasi ─────────────────────────────────────────────────────────
-@dp.message(Command("cancel"))
-async def cmd_cancel(msg: Message, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("lang", "uz")
-    await state.clear()
-    await state.set_state(CV.lang)
-    await msg.answer(T[lang]["cancelled"], reply_markup=kb_lang())
-
-# ── /help komandasi ───────────────────────────────────────────────────────────
-@dp.message(Command("help"))
-async def cmd_help(msg: Message, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("lang", "uz")
-    help_text = {
-        "uz": "ℹ️ <b>CV_MK Bot</b> — professional CV yaratish boti\n\n/start — Yangi CV boshlash\n/cancel — Jarayonni bekor qilish\n/help — Yordam",
-        "ru": "ℹ️ <b>CV_MK Bot</b> — бот для создания резюме\n\n/start — Начать новое CV\n/cancel — Отмена\n/help — Помощь",
-        "en": "ℹ️ <b>CV_MK Bot</b> — professional CV builder\n\n/start — Start a new CV\n/cancel — Cancel current process\n/help — Help",
-    }
-    await msg.answer(help_text.get(lang, help_text["uz"]), parse_mode="HTML")
 
 # ── Cancel helper ─────────────────────────────────────────────────────────────
 async def do_cancel(msg: Message, state: FSMContext):
@@ -813,67 +547,233 @@ async def do_cancel(msg: Message, state: FSMContext):
     await state.set_state(CV.lang)
     await msg.answer(T[lang]["cancelled"], reply_markup=kb_lang())
 
-# ── Catch-all: boshqa xabarlar ────────────────────────────────────────────────
-@dp.message()
-async def catch_all(msg: Message, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("lang", "uz")
-    current = await state.get_state()
-
-    # Til tanlanmagan yoki noma'lum state — til tanlashga qaytarish
-    if current is None or current == CV.lang.state:
-        await state.clear()
-        await state.set_state(CV.lang)
-        hint = {"uz": "⚠️ Iltimos, tilni tanlang:", "ru": "⚠️ Пожалуйста, выберите язык:", "en": "⚠️ Please choose a language:"}
-        await msg.answer(hint.get(lang, hint["uz"]), reply_markup=kb_lang())
-        return
-
-    # Foto kutilayotgan bo'lsa ammo boshqa narsa keldi
-    if current == CV.photo.state:
-        await msg.answer(T[lang]["ask_photo"], reply_markup=kb_skip_cancel(lang))
-        return
-
-    # Boshqa holatlarda qayta boshlash
+# ── Commands ──────────────────────────────────────────────────────────────────
+@dp.message(Command("start"))
+async def cmd_start(msg: Message, state: FSMContext):
     await state.clear()
     await state.set_state(CV.lang)
-    await msg.answer(T[lang]["welcome"], reply_markup=kb_lang())
+    await msg.answer(T["uz"]["welcome"], reply_markup=kb_lang(), parse_mode="HTML")
+    log.info("/start user=%s", msg.from_user.id if msg.from_user else "?")
+
+@dp.message(Command("cancel"))
+async def cmd_cancel(msg: Message, state: FSMContext):
+    await do_cancel(msg, state)
+
+@dp.message(Command("help"))
+async def cmd_help(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "uz")
+    await msg.answer(T[lang]["help"], parse_mode="HTML")
+
+# ── FSM: Til ──────────────────────────────────────────────────────────────────
+@dp.message(StateFilter(CV.lang), F.text.in_(LANG_BTNS))
+async def h_lang(msg: Message, state: FSMContext):
+    lang = LANG_MAP[msg.text]
+    await state.update_data(lang=lang)
+    await state.set_state(CV.design)
+    await msg.answer(T[lang]["design"], reply_markup=kb_design())
+
+# ── FSM: Dizayn ───────────────────────────────────────────────────────────────
+@dp.message(StateFilter(CV.design), F.text.in_(DESIGN_BTNS))
+async def h_design(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    await state.update_data(design=DESIGN_MAP[msg.text])
+    await state.set_state(CV.full_name)
+    await msg.answer(T[lang]["name"], reply_markup=kb_cancel(lang))
+
+# ── FSM: Ism ──────────────────────────────────────────────────────────────────
+@dp.message(StateFilter(CV.full_name), F.text)
+async def h_name(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    if len(msg.text.strip()) < 3:
+        return await msg.answer(T[lang]["name_short"], reply_markup=kb_cancel(lang))
+    await state.update_data(full_name=msg.text.strip())
+    await state.set_state(CV.job)
+    await msg.answer(T[lang]["job"], reply_markup=kb_jobs(lang))
+
+# ── FSM: Kasb ─────────────────────────────────────────────────────────────────
+@dp.message(StateFilter(CV.job), F.text)
+async def h_job(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    if msg.text not in JOBS[lang]:
+        return await msg.answer(T[lang]["wrong"], reply_markup=kb_jobs(lang))
+    if any(w in msg.text.lower() for w in ["boshqa", "другая", "other", "✏"]):
+        await state.set_state(CV.job_custom)
+        return await msg.answer(T[lang]["job_custom"], reply_markup=kb_cancel(lang))
+    await state.update_data(job=strip_emoji(msg.text))
+    await state.set_state(CV.phone)
+    await msg.answer(T[lang]["phone"], reply_markup=kb_cancel(lang))
+
+@dp.message(StateFilter(CV.job_custom), F.text)
+async def h_job_custom(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    await state.update_data(job=msg.text.strip())
+    await state.set_state(CV.phone)
+    await msg.answer(T[lang]["phone"], reply_markup=kb_cancel(lang))
+
+# ── FSM: Telefon → Email → Manzil ────────────────────────────────────────────
+@dp.message(StateFilter(CV.phone), F.text)
+async def h_phone(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    await state.update_data(phone=msg.text.strip())
+    await state.set_state(CV.email)
+    await msg.answer(T[lang]["email"], reply_markup=kb_cancel(lang))
+
+@dp.message(StateFilter(CV.email), F.text)
+async def h_email(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    await state.update_data(email=msg.text.strip())
+    await state.set_state(CV.address)
+    await msg.answer(T[lang]["address"], reply_markup=kb_cancel(lang))
+
+@dp.message(StateFilter(CV.address), F.text)
+async def h_address(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    await state.update_data(address=msg.text.strip())
+    await state.set_state(CV.photo)
+    await msg.answer(T[lang]["photo"], reply_markup=kb_skip_cancel(lang))
+
+# ── FSM: Foto ─────────────────────────────────────────────────────────────────
+@dp.message(StateFilter(CV.photo), F.photo)
+async def h_photo(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    try:
+        file = await bot.get_file(msg.photo[-1].file_id)
+        path = OUT_DIR / f"p_{uid()}.jpg"
+        await bot.download_file(file.file_path, destination=path)
+        await state.update_data(photo_path=str(path))
+    except Exception as e:
+        log.warning("Foto yuklashda xatolik: %s", e)
+        await state.update_data(photo_path="")
+    await state.set_state(CV.summary)
+    await msg.answer(T[lang]["summary"], reply_markup=kb_cancel(lang))
+
+@dp.message(StateFilter(CV.photo), F.text)
+async def h_photo_text(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    if is_skip(msg.text, lang):
+        await state.update_data(photo_path="")
+        await state.set_state(CV.summary)
+        return await msg.answer(T[lang]["summary"], reply_markup=kb_cancel(lang))
+    await msg.answer(T[lang]["photo"], reply_markup=kb_skip_cancel(lang))
+
+# ── FSM: Summary → Tajriba → Ta'lim → Ko'nikmalar → Tillar ──────────────────
+@dp.message(StateFilter(CV.summary), F.text)
+async def h_summary(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    await state.update_data(summary=msg.text.strip())
+    await state.set_state(CV.experience)
+    await msg.answer(T[lang]["experience"], reply_markup=kb_exp(lang))
+
+@dp.message(StateFilter(CV.experience), F.text)
+async def h_experience(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    if msg.text not in EXPERIENCE[lang]:
+        return await msg.answer(T[lang]["wrong"], reply_markup=kb_exp(lang))
+    await state.update_data(experience=msg.text)
+    await state.set_state(CV.education)
+    await msg.answer(T[lang]["education"], reply_markup=kb_edu(lang))
+
+@dp.message(StateFilter(CV.education), F.text)
+async def h_education(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    if msg.text not in EDUCATION[lang]:
+        return await msg.answer(T[lang]["wrong"], reply_markup=kb_edu(lang))
+    if any(w in msg.text.lower() for w in ["boshqa", "другое", "other", "✏"]):
+        await state.set_state(CV.education_custom)
+        return await msg.answer(T[lang]["edu_custom"], reply_markup=kb_cancel(lang))
+    await state.update_data(education=strip_emoji(msg.text))
+    await state.set_state(CV.skills)
+    await msg.answer(T[lang]["skills"], reply_markup=kb_cancel(lang))
+
+@dp.message(StateFilter(CV.education_custom), F.text)
+async def h_edu_custom(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    await state.update_data(education=msg.text.strip())
+    await state.set_state(CV.skills)
+    await msg.answer(T[lang]["skills"], reply_markup=kb_cancel(lang))
+
+@dp.message(StateFilter(CV.skills), F.text)
+async def h_skills(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    await state.update_data(skills=msg.text.strip())
+    await state.set_state(CV.languages)
+    await msg.answer(T[lang]["langs"], reply_markup=kb_cancel(lang))
+
+@dp.message(StateFilter(CV.languages), F.text)
+async def h_languages(msg: Message, state: FSMContext):
+    data = await state.get_data(); lang = data.get("lang", "uz")
+    if is_cancel(msg.text, lang): return await do_cancel(msg, state)
+    await state.update_data(languages=msg.text.strip())
+    await finalize(msg, state)
+
+# ── Catch-all ─────────────────────────────────────────────────────────────────
+@dp.message()
+async def catch_all(msg: Message, state: FSMContext):
+    data    = await state.get_data()
+    lang    = data.get("lang", "uz")
+    current = await state.get_state()
+
+    if not current or current == CV.lang.state:
+        await state.clear()
+        await state.set_state(CV.lang)
+        await msg.answer(T[lang]["welcome"], reply_markup=kb_lang(), parse_mode="HTML")
+    elif current == CV.design.state:
+        await msg.answer(T[lang]["wrong"], reply_markup=kb_design())
+    elif current == CV.photo.state:
+        await msg.answer(T[lang]["photo"], reply_markup=kb_skip_cancel(lang))
+    else:
+        await msg.answer(T[lang]["wrong"])
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 async def main():
-    logger.info("CV_MK Bot ishga tushmoqda...")
-
+    log.info("CV_MK Bot ishga tushmoqda...")
     try:
         me = await bot.get_me()
-        logger.info("Bot ulandi: @%s (id=%s)", me.username, me.id)
+        log.info("Bot: @%s (id=%s)", me.username, me.id)
     except Exception as e:
-        logger.critical("BOT_TOKEN noto'g'ri yoki Telegram'ga ulanib bo'lmadi: %s", e)
+        log.critical("BOT_TOKEN xato: %s", e)
         raise
 
     if RENDER_URL:
+        # ── Webhook mode (Render production) ──────────────────────────────────
         from aiohttp import web as aio_web
         from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-        webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
+        webhook_url = f"{RENDER_URL}{WH_PATH}"
         await bot.set_webhook(webhook_url, drop_pending_updates=True)
-        logger.info("Webhook o'rnatildi: %s", webhook_url)
+        log.info("Webhook: %s", webhook_url)
 
-        aio_app = aio_web.Application()
-        SimpleRequestHandler(dispatcher=dp, bot=bot).register(aio_app, path=WEBHOOK_PATH)
-        setup_application(aio_app, dp, bot=bot)
+        app = aio_web.Application()
+        SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WH_PATH)
+        setup_application(app, dp, bot=bot)
 
-        async def health(_): return aio_web.Response(text="CV_MK Bot ishlayapti")
-        aio_app.router.add_get("/", health)
-        aio_app.router.add_get("/health", health)
+        async def health(_): return aio_web.Response(text="OK")
+        app.router.add_get("/", health)
+        app.router.add_get("/health", health)
 
-        port = int(os.getenv("PORT", 10000))
-        runner = aio_web.AppRunner(aio_app)
+        runner = aio_web.AppRunner(app)
         await runner.setup()
+        port = int(os.getenv("PORT", 10000))
         await aio_web.TCPSite(runner, "0.0.0.0", port).start()
-        logger.info("Webhook server port %s da ishlamoqda", port)
+        log.info("Webhook server port=%s", port)
         await asyncio.Event().wait()
     else:
+        # ── Polling mode (local dev) ───────────────────────────────────────────
         await bot.delete_webhook(drop_pending_updates=True)
-        logger.info("Local dev: polling boshlanmoqda...")
+        log.info("Polling (local dev)...")
         await dp.start_polling(bot, allowed_updates=["message"])
 
 if __name__ == "__main__":
