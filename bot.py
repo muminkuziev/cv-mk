@@ -1,6 +1,5 @@
 import os
 import asyncio
-import threading
 import textwrap
 import base64
 import uuid
@@ -8,7 +7,6 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, StateFilter
 from aiogram.types import (
@@ -40,20 +38,8 @@ BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# ── Flask (health check) ─────────────────────────────────────────────────────
-web = Flask(__name__)
-
-@web.route("/")
-def home():
-    return "CV_MK Bot ishlayapti", 200
-
-@web.route("/health")
-def health():
-    return "OK", 200
-
-def run_flask():
-    port = int(os.getenv("PORT", 10000))
-    web.run(host="0.0.0.0", port=port, use_reloader=False)
+RENDER_URL   = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+WEBHOOK_PATH = f"/tg/{BOT_TOKEN[-12:]}"
 
 # ── Bot / Dispatcher ──────────────────────────────────────────────────────────
 bot = Bot(token=BOT_TOKEN)
@@ -856,7 +842,6 @@ async def catch_all(msg: Message, state: FSMContext):
 async def main():
     logger.info("CV_MK Bot ishga tushmoqda...")
 
-    # Token va ulanishni tekshirish
     try:
         me = await bot.get_me()
         logger.info("Bot ulandi: @%s (id=%s)", me.username, me.id)
@@ -864,12 +849,32 @@ async def main():
         logger.critical("BOT_TOKEN noto'g'ri yoki Telegram'ga ulanib bo'lmadi: %s", e)
         raise
 
-    # Webhook bo'lsa o'chirish — polling bilan konflikt oldini olish
-    await bot.delete_webhook(drop_pending_updates=True)
-    logger.info("Webhook tozalandi. Polling boshlanmoqda...")
+    if RENDER_URL:
+        from aiohttp import web as aio_web
+        from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-    threading.Thread(target=run_flask, daemon=True).start()
-    await dp.start_polling(bot, allowed_updates=["message"])
+        webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
+        await bot.set_webhook(webhook_url, drop_pending_updates=True)
+        logger.info("Webhook o'rnatildi: %s", webhook_url)
+
+        aio_app = aio_web.Application()
+        SimpleRequestHandler(dispatcher=dp, bot=bot).register(aio_app, path=WEBHOOK_PATH)
+        setup_application(aio_app, dp, bot=bot)
+
+        async def health(_): return aio_web.Response(text="CV_MK Bot ishlayapti")
+        aio_app.router.add_get("/", health)
+        aio_app.router.add_get("/health", health)
+
+        port = int(os.getenv("PORT", 10000))
+        runner = aio_web.AppRunner(aio_app)
+        await runner.setup()
+        await aio_web.TCPSite(runner, "0.0.0.0", port).start()
+        logger.info("Webhook server port %s da ishlamoqda", port)
+        await asyncio.Event().wait()
+    else:
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Local dev: polling boshlanmoqda...")
+        await dp.start_polling(bot, allowed_updates=["message"])
 
 if __name__ == "__main__":
     asyncio.run(main())
