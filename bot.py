@@ -517,7 +517,7 @@ def generate_pdf(data: dict, fid: str) -> Path:
     main_section(lbl["education"],  safe(data.get("education")))
 
     # ── Sidebar content ────────────────────────────────────────────────────────
-    y_side = H - 66
+    y_side = H - 95  # photo circle center: top = H-95+43=H-52, below header (H-36)
 
     def side_title(title: str):
         nonlocal y_side
@@ -528,7 +528,7 @@ def generate_pdf(data: dict, fid: str) -> Path:
         c.drawString(10, y_side, title.upper())
         y_side -= 13
 
-    def side_text(text: str, w: int = 26):
+    def side_text(text: str, w: int = 30):
         nonlocal y_side
         c.setFillColorRGB(*TXT_)
         c.setFont(FONT, 8)
@@ -798,6 +798,27 @@ async def step_langs(msg: Message, state: FSMContext):
     await state.update_data(languages=msg.text.strip())
     await finalize(msg, state)
 
+# ── /cancel komandasi ─────────────────────────────────────────────────────────
+@dp.message(Command("cancel"))
+async def cmd_cancel(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "uz")
+    await state.clear()
+    await state.set_state(CV.lang)
+    await msg.answer(T[lang]["cancelled"], reply_markup=kb_lang())
+
+# ── /help komandasi ───────────────────────────────────────────────────────────
+@dp.message(Command("help"))
+async def cmd_help(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "uz")
+    help_text = {
+        "uz": "ℹ️ <b>CV_MK Bot</b> — professional CV yaratish boti\n\n/start — Yangi CV boshlash\n/cancel — Jarayonni bekor qilish\n/help — Yordam",
+        "ru": "ℹ️ <b>CV_MK Bot</b> — бот для создания резюме\n\n/start — Начать новое CV\n/cancel — Отмена\n/help — Помощь",
+        "en": "ℹ️ <b>CV_MK Bot</b> — professional CV builder\n\n/start — Start a new CV\n/cancel — Cancel current process\n/help — Help",
+    }
+    await msg.answer(help_text.get(lang, help_text["uz"]), parse_mode="HTML")
+
 # ── Cancel helper ─────────────────────────────────────────────────────────────
 async def do_cancel(msg: Message, state: FSMContext):
     data = await state.get_data()
@@ -813,11 +834,12 @@ async def catch_all(msg: Message, state: FSMContext):
     lang = data.get("lang", "uz")
     current = await state.get_state()
 
-    # Noto'g'ri state — qayta boshlash
+    # Til tanlanmagan yoki noma'lum state — til tanlashga qaytarish
     if current is None or current == CV.lang.state:
         await state.clear()
         await state.set_state(CV.lang)
-        await msg.answer(T[lang]["welcome"], reply_markup=kb_lang())
+        hint = {"uz": "⚠️ Iltimos, tilni tanlang:", "ru": "⚠️ Пожалуйста, выберите язык:", "en": "⚠️ Please choose a language:"}
+        await msg.answer(hint.get(lang, hint["uz"]), reply_markup=kb_lang())
         return
 
     # Foto kutilayotgan bo'lsa ammo boshqa narsa keldi
