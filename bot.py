@@ -55,7 +55,7 @@ class CV(StatesGroup):
     certifications   = State()
     preview          = State()
 
-# ── 20 Templates ──────────────────────────────────────────────────────────────
+# ── 25 Templates ──────────────────────────────────────────────────────────────
 TEMPLATES = [
     {"id":"executive_black",      "name":"Executive Black",     "emoji":"⚫","layout":"dark_sidebar",   "bg":"#13161A","sb":"#1C2128","hd":"#1C2128","ac":"#C9A84C","tx":"#E8E0D0","st":"#8A7A60","fn":"Georgia,'Times New Roman',serif"},
     {"id":"premium_gold",         "name":"Premium Gold",        "emoji":"🥇","layout":"dark_banner",    "bg":"#141414","sb":"#1E1E1E","hd":"#0D0D0D","ac":"#D4AF37","tx":"#F0E8D0","st":"#9A9070","fn":"Georgia,serif"},
@@ -77,8 +77,21 @@ TEMPLATES = [
     {"id":"finance_banking",      "name":"Finance & Banking",   "emoji":"💰","layout":"banner_light",   "bg":"#FFFFFF","sb":"#EEF0F8","hd":"#1B2951","ac":"#1B2951","tx":"#0A1020","st":"#3A5060","fn":"Georgia,serif"},
     {"id":"modern_dark_blue",     "name":"Modern Dark Blue",    "emoji":"🌊","layout":"dark_sidebar",   "bg":"#0A1628","sb":"#0F2A47","hd":"#0F2A47","ac":"#1E6FB8","tx":"#D8E8F8","st":"#4878A8","fn":"'Segoe UI',Arial,sans-serif"},
     {"id":"sales_manager",        "name":"Sales Manager",       "emoji":"📈","layout":"dark_metrics",   "bg":"#100808","sb":"#1A1010","hd":"#200A0A","ac":"#C0202C","tx":"#F0E8E8","st":"#907070","fn":"Arial,sans-serif"},
+    # ── Uzbek vocational templates (21-25) ─────────────────────────────────────
+    {"id":"quruvchi",             "name":"Quruvchi-usta",        "emoji":"🧱","layout":"uzbek_sidebar",  "bg":"#FFFFFF","sb":"#2C333A","hd":"#2C333A","ac":"#E8631A","tx":"#22262B","st":"#888888","fn":"'Segoe UI',Arial,sans-serif"},
+    {"id":"oshpaz",               "name":"Oshpaz",               "emoji":"👨‍🍳","layout":"uzbek_banner",  "bg":"#FFFFFF","sb":"#7A2E1E","hd":"#7A2E1E","ac":"#C0492B","tx":"#2A1714","st":"#888888","fn":"'Segoe UI',Arial,sans-serif"},
+    {"id":"oshpaz_yordamchisi",   "name":"Oshpaz yordamchisi",  "emoji":"🍴","layout":"uzbek_sidebar",  "bg":"#FFFFFF","sb":"#2F6B33","hd":"#2F6B33","ac":"#3E8E41","tx":"#1C2B22","st":"#888888","fn":"'Segoe UI',Arial,sans-serif"},
+    {"id":"tozalovchi",           "name":"Tozalovchi/Xizmatchi","emoji":"🧹","layout":"uzbek_sidebar",  "bg":"#FFFFFF","sb":"#0E7C72","hd":"#0E7C72","ac":"#0E9488","tx":"#13302C","st":"#888888","fn":"'Segoe UI',Arial,sans-serif"},
+    {"id":"zavod_ishchisi",       "name":"Zavod ishchisi",       "emoji":"🏭","layout":"uzbek_banner",   "bg":"#FFFFFF","sb":"#16344F","hd":"#16344F","ac":"#1F6FB2","tx":"#16202B","st":"#888888","fn":"'Segoe UI',Arial,sans-serif"},
 ]
 TPL_BY_ID = {t["id"]: t for t in TEMPLATES}
+
+UZ_VOC_LABELS = {
+    "summary":"Men haqimda","experience":"Ish tajribasi","education":"Ta'lim va kurslar",
+    "skills":"Ko'nikmalar","qualities":"Shaxsiy fazilatlar","languages":"Tillar",
+    "certs":"Sertifikatlar","phone":"Tel","email":"Email","address":"Manzil",
+    "contact":"Aloqa","footer":"CV_MK V2.1",
+}
 
 # ── Static data ───────────────────────────────────────────────────────────────
 LANG_BTNS = ["🇺🇿 O'zbek","🇷🇺 Русский","🇬🇧 English"]
@@ -103,7 +116,7 @@ EDUCATION = {"uz":["🏫 Maktab","🏢 Kollej / Litsey","🎓 Bakalavr","🎓 Ma
 
 T = {
     "uz":{
-        "welcome":"👋 Salom! <b>CV_MK V2.1</b> — 20 premium dizayn!\n\nHTML preview = PDF, bir xil sifat.\n\n🌍 Tilni tanlang:",
+        "welcome":"👋 Salom! <b>CV_MK V2.1</b> — 25 premium dizayn!\n\nHTML preview = PDF, bir xil sifat.\n\n🌍 Tilni tanlang:",
         "name":"👤 Ism va familiyangizni yozing:","name_short":"⚠️ Ism juda qisqa. Qaytadan yozing:",
         "job":"💼 Kasbingizni tanlang:","job_custom":"✏️ Kasbingizni yozing:",
         "phone":"📞 Telefon raqamingiz:","email":"📧 Email manzilingiz:",
@@ -112,7 +125,7 @@ T = {
         "education":"🎓 Ta'lim darajangizni tanlang:","edu_custom":"✏️ Ta'limingizni yozing:",
         "skills":"🛠 Ko'nikmalar (vergul bilan):\nMasalan: Kafel, Suvoq","langs":"🌐 Tillar (vergul bilan):\nMasalan: O'zbek, Rus",
         "certs":"📜 Sertifikatlar (ixtiyoriy, ⏭ o'tkazib yuborish):\nMasalan: ISO 9001",
-        "preview_hdr":"🎨 <b>Dizayn tanlang</b> — 20 ta premium template!\n\n⬅️ ➡️ aylantiring, ✅ tanlang:",
+        "preview_hdr":"🎨 <b>Dizayn tanlang</b> — 25 ta premium template!\n\n⬅️ ➡️ aylantiring, ✅ tanlang:",
         "creating":"⏳ CV yaratilmoqda...","pdf_ready":"✅ PDF tayyor! (A4, print-ready)",
         "html_ready":"🌐 HTML (brauzerda oching — PDF bilan bir xil ko'rinish):",
         "png_ready":"🖼 Preview:","done":"✅ CV tayyor!\n\n🔄 Yangi CV — /start",
@@ -124,7 +137,7 @@ T = {
                   "phone":"Telefon","email":"Email","address":"Manzil","footer":"CV_MK V2.1"},
     },
     "ru":{
-        "welcome":"👋 Привет! <b>CV_MK V2.1</b> — 20 премиум шаблонов!\n\nHTML = PDF, одинаковое качество.\n\n🌍 Выберите язык:",
+        "welcome":"👋 Привет! <b>CV_MK V2.1</b> — 25 премиум шаблонов!\n\nHTML = PDF, одинаковое качество.\n\n🌍 Выберите язык:",
         "name":"👤 Напишите имя и фамилию:","name_short":"⚠️ Имя слишком короткое. Напишите снова:",
         "job":"💼 Выберите профессию:","job_custom":"✏️ Напишите профессию:",
         "phone":"📞 Номер телефона:","email":"📧 Email:",
@@ -133,7 +146,7 @@ T = {
         "education":"🎓 Уровень образования:","edu_custom":"✏️ Напишите образование:",
         "skills":"🛠 Навыки (через запятую):\nНапример: Плитка, Штукатурка","langs":"🌐 Языки (через запятую):",
         "certs":"📜 Сертификаты (необязательно, ⏭ пропустить):",
-        "preview_hdr":"🎨 <b>Выберите дизайн</b> — 20 премиум шаблонов!\n\n⬅️ ➡️ листайте, ✅ выбирайте:",
+        "preview_hdr":"🎨 <b>Выберите дизайн</b> — 25 премиум шаблонов!\n\n⬅️ ➡️ листайте, ✅ выбирайте:",
         "creating":"⏳ Создаём резюме...","pdf_ready":"✅ PDF готово! (A4, print-ready)",
         "html_ready":"🌐 HTML (открыть в браузере — тот же вид что PDF):",
         "png_ready":"🖼 Превью:","done":"✅ Резюме готово!\n\n🔄 Новое — /start",
@@ -145,7 +158,7 @@ T = {
                   "phone":"Телефон","email":"Email","address":"Адрес","footer":"CV_MK V2.1"},
     },
     "en":{
-        "welcome":"👋 Hello! <b>CV_MK V2.1</b> — 20 premium designs!\n\nHTML = PDF, identical quality.\n\n🌍 Choose language:",
+        "welcome":"👋 Hello! <b>CV_MK V2.1</b> — 25 premium designs!\n\nHTML = PDF, identical quality.\n\n🌍 Choose language:",
         "name":"👤 Enter your full name:","name_short":"⚠️ Name too short. Please write again:",
         "job":"💼 Choose your profession:","job_custom":"✏️ Write your profession:",
         "phone":"📞 Phone number:","email":"📧 Email:",
@@ -154,7 +167,7 @@ T = {
         "education":"🎓 Education level:","edu_custom":"✏️ Write your education:",
         "skills":"🛠 Skills (comma-separated):\nExample: Tiling, Plastering","langs":"🌐 Languages (comma-separated):",
         "certs":"📜 Certifications (optional, ⏭ skip):\nExample: ISO 9001",
-        "preview_hdr":"🎨 <b>Choose your design</b> — 20 premium templates!\n\n⬅️ ➡️ browse, ✅ select:",
+        "preview_hdr":"🎨 <b>Choose your design</b> — 25 premium templates!\n\n⬅️ ➡️ browse, ✅ select:",
         "creating":"⏳ Creating your CV...","pdf_ready":"✅ PDF ready! (A4, print-ready)",
         "html_ready":"🌐 HTML (open in browser — same look as PDF):",
         "png_ready":"🖼 Preview:","done":"✅ CV ready!\n\n🔄 New CV — /start",
@@ -673,6 +686,133 @@ font-weight:700;margin-bottom:1.5mm;display:flex;align-items:center;gap:2mm}}
 </div>
 </div></body></html>"""
 
+# ── Uzbek vocational layouts ──────────────────────────────────────────────────
+
+def _tpl_uzbek_sidebar(data: dict, t: dict) -> str:
+    lbl = UZ_VOC_LABELS
+    init = "".join(w[0].upper() for w in s(data.get("full_name","CV")).split()[:2]) or "CV"
+    skill_chips = "".join(
+        f'<span style="display:inline-block;font-size:6.5pt;padding:0.5mm 1.5mm;margin:0.3mm;'
+        f'background:rgba(255,255,255,.16);color:#fff;border-radius:1mm">{e(x.strip())}</span>'
+        for x in re.split(r"[,\n]",s(data.get("skills",""))) if x.strip()
+    )
+    qual_rows = "".join(
+        f'<div style="font-size:7.5pt;padding:0.4mm 0 0.4mm 3.5mm;position:relative;color:rgba(255,255,255,.9)">'
+        f'<span style="position:absolute;left:0;color:#fff;font-size:7pt">✔</span>{e(x.strip())}</div>'
+        for x in re.split(r"[,\n]",s(data.get("certifications",""))) if x.strip()
+    )
+    lang_rows = "".join(
+        f'<div style="font-size:7.5pt;color:rgba(255,255,255,.88);line-height:1.4">{e(x.strip())}</div>'
+        for x in re.split(r"[,\n]",s(data.get("languages",""))) if x.strip()
+    )
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>{e(data.get('full_name',''))} — CV</title><style>
+@page{{size:210mm 297mm;margin:0}}
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+html{{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}}
+body{{background:#D0D0D0;display:flex;justify-content:center;padding:16px;font-family:{t['fn']}}}
+.page{{width:210mm;min-height:297mm;background:linear-gradient(to right,{t['sb']} 0,{t['sb']} 66mm,#fff 66mm,#fff 100%);overflow:hidden;position:relative}}
+@media print{{body{{background:#D0D0D0;padding:0;display:block}}.page{{width:210mm;height:297mm;min-height:unset}}}}
+.layout{{display:table;width:210mm;min-height:297mm}}
+.col-side{{display:table-cell;width:66mm;vertical-align:top;padding:8mm 5mm;color:#fff}}
+.col-main{{display:table-cell;vertical-align:top;padding:8mm 7mm 8mm 6mm;background:#fff}}
+.avatar{{width:22mm;height:22mm;border-radius:50%;background:#fff;color:{t['ac']};font-size:10pt;font-weight:800;text-align:center;line-height:22mm;margin:0 auto 3mm;display:block}}
+.s-name{{font-size:11pt;font-weight:800;text-align:center;line-height:1.2;margin-bottom:1mm}}
+.s-title{{font-size:6.5pt;text-align:center;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.85);margin-bottom:3.5mm}}
+.sb-sec h4{{font-size:6pt;letter-spacing:.1em;text-transform:uppercase;color:#fff;font-weight:700;border-bottom:0.2mm solid rgba(255,255,255,.25);padding-bottom:1mm;margin-bottom:1.5mm;margin-top:3mm}}
+.sb-sec .val{{font-size:7.5pt;color:rgba(255,255,255,.88);line-height:1.4;word-break:break-word}}
+.main-head h1{{font-size:16pt;font-weight:800;color:{t['tx']};line-height:1.1;margin-bottom:0.5mm}}
+.main-head .m-title{{font-size:8pt;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:{t['ac']};margin-bottom:2mm}}
+.main-head{{border-bottom:0.4mm solid {t['ac']};padding-bottom:2mm;margin-bottom:3mm}}
+.sec{{margin-bottom:3mm}}
+.sec h2{{font-size:7pt;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:{t['ac']};border-bottom:0.2mm solid {t['ac']}40;padding-bottom:1mm;margin-bottom:1.5mm}}
+.sec p{{font-size:9pt;line-height:1.65;color:{t['tx']};opacity:.9;white-space:pre-line}}
+.foot{{font-size:6pt;color:#aaa;text-align:center;margin-top:3mm;padding-top:1.5mm;border-top:0.2mm solid #eee}}
+</style></head><body><div class="page"><div class="layout">
+<div class="col-side">
+  <div class="avatar">{init}</div>
+  <div class="s-name">{e(data.get('full_name','—'))}</div>
+  <div class="s-title">{e(data.get('job','—'))}</div>
+  <div class="sb-sec"><h4>{lbl['contact']}</h4>
+    <div class="val">{e(data.get('phone','—'))}</div>
+    <div class="val">{e(data.get('address','—'))}</div>
+  </div>
+  <div class="sb-sec"><h4>{lbl['skills']}</h4><div>{skill_chips}</div></div>
+  {'<div class="sb-sec"><h4>'+lbl['qualities']+'</h4>'+qual_rows+'</div>' if data.get('certifications') else ''}
+  <div class="sb-sec"><h4>{lbl['languages']}</h4><div>{lang_rows}</div></div>
+</div>
+<div class="col-main">
+  <div class="main-head"><h1>{e(data.get('full_name','—'))}</h1><div class="m-title">{e(data.get('job','—'))}</div></div>
+  <div class="sec"><h2>{lbl['summary']}</h2><p>{e(data.get('summary','—'))}</p></div>
+  <div class="sec"><h2>{lbl['experience']}</h2><p>{e(data.get('experience','—'))}</p></div>
+  <div class="sec"><h2>{lbl['education']}</h2><p>{e(data.get('education','—'))}</p></div>
+  <div class="foot">{lbl['footer']} • {datetime.now().strftime('%d.%m.%Y')}</div>
+</div>
+</div></div></body></html>"""
+
+
+def _tpl_uzbek_banner(data: dict, t: dict) -> str:
+    lbl = UZ_VOC_LABELS
+    init = "".join(w[0].upper() for w in s(data.get("full_name","CV")).split()[:2]) or "CV"
+    skill_chips = "".join(
+        f'<span style="display:inline-block;font-size:8pt;padding:1mm 2.5mm;margin:0.5mm;'
+        f'background:{t["ac"]}22;color:{t["ac"]};border-radius:1.5mm;font-weight:600">{e(x.strip())}</span>'
+        for x in re.split(r"[,\n]",s(data.get("skills",""))) if x.strip()
+    )
+    qual_rows = "".join(
+        f'<div style="font-size:8.5pt;padding:0.8mm 0 0.8mm 4mm;position:relative;color:{t["tx"]};opacity:.9">'
+        f'<span style="position:absolute;left:0;color:{t["ac"]}">✔</span>{e(x.strip())}</div>'
+        for x in re.split(r"[,\n]",s(data.get("certifications",""))) if x.strip()
+    )
+    lang_rows = "".join(
+        f'<p style="font-size:9pt;color:{t["tx"]};opacity:.85">{e(x.strip())}</p>'
+        for x in re.split(r"[,\n]",s(data.get("languages",""))) if x.strip()
+    )
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>{e(data.get('full_name',''))} — CV</title><style>
+@page{{size:210mm 297mm;margin:0}}
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+html{{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}}
+body{{background:#D0D0D0;display:flex;justify-content:center;padding:16px;font-family:{t['fn']}}}
+.page{{width:210mm;min-height:297mm;background:#fff;overflow:hidden;position:relative}}
+@media print{{body{{background:#D0D0D0;padding:0;display:block}}.page{{width:210mm;height:297mm;min-height:unset}}}}
+.band{{background:{t['hd']};color:#fff;padding:7mm 9mm;display:flex;align-items:center;gap:5mm}}
+.avatar{{width:22mm;height:22mm;border-radius:50%;background:#fff;color:{t['ac']};font-size:10pt;font-weight:800;text-align:center;line-height:22mm;flex-shrink:0}}
+.band-txt h1{{font-size:17pt;font-weight:800;color:#fff;line-height:1.1}}
+.band-txt .b-title{{font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.9);margin-top:1mm}}
+.band-txt .b-contact{{font-size:7.5pt;color:rgba(255,255,255,.8);margin-top:1.5mm;line-height:1.5}}
+.body{{padding:5mm 9mm}}
+.sec{{margin-bottom:3mm}}
+.sec h2{{font-size:7pt;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:{t['ac']};border-bottom:0.2mm solid {t['ac']}40;padding-bottom:1mm;margin-bottom:1.5mm}}
+.sec p{{font-size:9pt;line-height:1.65;color:{t['tx']};opacity:.9;white-space:pre-line}}
+.two{{display:flex;gap:5mm}}
+.col{{flex:1}}
+.foot{{font-size:6pt;color:#aaa;text-align:center;margin-top:3mm;padding-top:1.5mm;border-top:0.2mm solid #eee}}
+</style></head><body><div class="page">
+<div class="band">
+  <div class="avatar">{init}</div>
+  <div class="band-txt">
+    <h1>{e(data.get('full_name','—'))}</h1>
+    <div class="b-title">{e(data.get('job','—'))}</div>
+    <div class="b-contact">{e(data.get('phone',''))} &nbsp;·&nbsp; {e(data.get('address',''))}</div>
+  </div>
+</div>
+<div class="body">
+  <div class="sec"><h2>{lbl['summary']}</h2><p>{e(data.get('summary','—'))}</p></div>
+  <div class="sec"><h2>{lbl['experience']}</h2><p>{e(data.get('experience','—'))}</p></div>
+  <div class="two">
+    <div class="col"><div class="sec"><h2>{lbl['skills']}</h2><div>{skill_chips}</div></div></div>
+    <div class="col">{'<div class="sec"><h2>'+lbl['qualities']+'</h2>'+qual_rows+'</div>' if data.get('certifications') else ''}</div>
+  </div>
+  <div class="two">
+    <div class="col"><div class="sec"><h2>{lbl['education']}</h2><p>{e(data.get('education','—'))}</p></div></div>
+    <div class="col"><div class="sec"><h2>{lbl['languages']}</h2>{lang_rows}</div></div>
+  </div>
+  <div class="foot">{lbl['footer']} • {datetime.now().strftime('%d.%m.%Y')}</div>
+</div>
+</div></body></html>"""
+
+
 # ── HTML dispatch ──────────────────────────────────────────────────────────────
 def generate_html(data:dict, fid:str, tpl_id:str) -> Path:
     t    = TPL_BY_ID.get(tpl_id, TEMPLATES[0])
@@ -698,6 +838,10 @@ def generate_html(data:dict, fid:str, tpl_id:str) -> Path:
         html = _tpl_initials_side(data, t, lbl)
     elif layout == "industrial":
         html = _tpl_industrial(data, t, lbl)
+    elif layout == "uzbek_sidebar":
+        html = _tpl_uzbek_sidebar(data, t)
+    elif layout == "uzbek_banner":
+        html = _tpl_uzbek_banner(data, t)
     else:
         html = _tpl_sidebar(data, t, lbl, dark=True)
 
@@ -805,6 +949,28 @@ def make_preview(tpl:dict, idx:int) -> bytes:
         d.rectangle([0,80,W,84],fill=ac); x0=14
         stitle(x0,96); tlines(x0,[106,116,126],[190,150,120])
         stitle(x0,148); tlines(x0,[158,168,178],[200,160,130])
+    elif layout=="uzbek_sidebar":
+        sw=108; d.rectangle([0,0,sw,H],fill=sb); d.line([sw,0,sw,H],fill=ac,width=1)
+        cx,cy,r=sw//2,68,30; d.ellipse([cx-r,cy-r,cx+r,cy+r],outline=ac,width=2,fill=_mix(sb,ac,0.1))
+        for i,y0 in enumerate(range(112,H-50,44)):
+            d.rectangle([10,y0,sw-10,y0+4],fill=_mix(sb,ac,0.7))
+            d.rectangle([10,y0+10,sw-16,y0+14],fill=_mix(sb,tx,0.3))
+            d.rectangle([10,y0+20,sw-22,y0+24],fill=_mix(sb,tx,0.2))
+        d.line([sw+14,52,W-14,52],fill=ac,width=2)
+        tlines(sw+14,[58,70],[160,90],title_col=_mix(bg,tx,0.9))
+        stitle(sw+14,92); tlines(sw+14,[100,110,120],[140,110,90])
+        stitle(sw+14,140); tlines(sw+14,[148,158,168],[130,100,80])
+        stitle(sw+14,188); tlines(sw+14,[196,206],[120,90])
+    elif layout=="uzbek_banner":
+        d.rectangle([0,0,W,86],fill=hd)
+        d.ellipse([14,12,74,72],fill=_mix(hd,(255,255,255),0.1),outline=_mix(hd,(255,255,255),0.4),width=2)
+        d.rectangle([84,22,260,33],fill=_mix(hd,(255,255,255),0.9))
+        d.rectangle([84,40,200,49],fill=_mix(hd,(255,255,255),0.5))
+        d.rectangle([0,86,W,90],fill=ac)
+        x0=14
+        stitle(x0,104); tlines(x0,[113,123,133],[180,140,110])
+        stitle(x0,153); tlines(x0,[162,172,182],[200,160,130])
+        stitle(x0,202); tlines(x0,[211,221],[170,130])
     else:
         d.rectangle([0,0,W,65],fill=hd); d.rectangle([0,65,W,69],fill=ac)
         stitle(14,82); tlines(14,[92,102,112],[190,150,120])
