@@ -1164,15 +1164,22 @@ async def cb_noop(cb:CallbackQuery): await cb.answer()
 @dp.callback_query(F.data.startswith("nav:"))
 async def cb_nav(cb:CallbackQuery,state:FSMContext):
     idx=int(cb.data.split(":")[1]); data=await state.get_data(); lang=data.get("lang","uz")
-    await state.update_data(template_idx=idx); tpl=TEMPLATES[idx]
+    await cb.answer("⏳")
+    log.info("NAV callback idx=%s user=%s",idx,cb.from_user.id)
+    await state.update_data(template_idx=idx)
+    tpl=TEMPLATES[idx]
     img=make_preview(tpl,idx)
     caption=f"{tpl['emoji']} <b>{tpl['name']}</b>  ({idx+1}/{len(TEMPLATES)})"
     try:
-        await cb.message.edit_media(
-            media=InputMediaPhoto(media=BufferedInputFile(img,"preview.jpg"),caption=caption,parse_mode="HTML"),
-            reply_markup=kb_preview(idx,lang))
-    except Exception as ex: log.warning("edit_media: %s",ex)
-    await cb.answer()
+        await cb.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await cb.message.answer_photo(
+        photo=BufferedInputFile(img,"preview.jpg"),
+        caption=caption,
+        parse_mode="HTML",
+        reply_markup=kb_preview(idx,lang),
+    )
 
 @dp.callback_query(F.data.startswith("sel:"))
 async def cb_select(cb:CallbackQuery,state:FSMContext):
@@ -1188,9 +1195,10 @@ async def cb_select(cb:CallbackQuery,state:FSMContext):
     wait=await cb.message.answer(T[lang]["creating"])
     fid=uid(); html_path=pdf_path=None
     try:
-        html_path=generate_html(data,fid,tpl["id"])
-        pdf_path=generate_pdf(data,fid,tpl["id"])
-        png_bytes=make_preview(tpl,idx)
+        log.info("SELECT callback idx=%s user=%s template=%s",idx,cb.from_user.id,tpl["id"])
+        html_path=await asyncio.to_thread(generate_html,data,fid,tpl["id"])
+        pdf_path=await asyncio.to_thread(generate_pdf,data,fid,tpl["id"])
+        png_bytes=await asyncio.to_thread(make_preview,tpl,idx)
         await cb.message.answer_document(FSInputFile(pdf_path), caption=T[lang]["pdf_ready"])
         await cb.message.answer_document(FSInputFile(html_path),caption=T[lang]["html_ready"])
         await cb.message.answer_photo(photo=BufferedInputFile(png_bytes,"cv_preview.jpg"),caption=T[lang]["png_ready"])
