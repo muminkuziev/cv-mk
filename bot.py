@@ -306,16 +306,19 @@ def _tpl_sidebar(data:dict, t:dict, lbl:dict, dark:bool) -> str:
 <title>{e(data.get('full_name',''))} — CV</title><style>
 {_page_css(t)}
 .wrap{{display:flex;width:210mm;min-height:297mm}}
-.sb{{width:68mm;min-height:297mm;background:{t['sb']};padding:8mm 5mm 8mm 5mm;
-display:flex;flex-direction:column;gap:3.5mm;border-right:0.3mm solid {t['ac']}40}}
+.sb{{width:68mm;min-height:297mm;background:{t['sb']};padding:10mm 5mm 10mm 5mm;
+display:flex;flex-direction:column;gap:7mm;border-right:0.3mm solid {t['ac']}40}}
 .sb-item h4{{font-size:6.5pt;letter-spacing:.12em;text-transform:uppercase;
-color:{t['ac']};font-weight:700;margin-bottom:1mm}}
-.sb-item .val{{font-size:8.5pt;color:{t['tx']};opacity:.82;line-height:1.45;word-break:break-all}}
-.mn{{flex:1;padding:8mm 7mm 8mm 6mm;display:flex;flex-direction:column}}
-.hdr{{border-bottom:0.4mm solid {t['ac']};padding-bottom:3mm;margin-bottom:3.5mm}}
+color:{t['ac']};font-weight:700;margin-bottom:1.6mm}}
+.sb-item .val{{font-size:8.5pt;color:{t['tx']};opacity:.82;line-height:1.55;word-break:break-word}}
+.mn{{flex:1;padding:10mm 7mm 10mm 7mm;display:flex;flex-direction:column}}
+.hdr{{border-bottom:0.4mm solid {t['ac']};padding-bottom:4mm;margin-bottom:8mm}}
 .hdr h1{{font-size:19pt;font-weight:800;color:{t['tx']};line-height:1.1}}
-.hdr .role{{font-size:10.5pt;color:{t['ac']};font-weight:600;margin-top:1.2mm}}
-.foot{{margin-top:auto;padding-top:2.5mm;border-top:0.2mm solid {t['ac']}20;
+.hdr .role{{font-size:10.5pt;color:{t['ac']};font-weight:600;margin-top:1.5mm}}
+.mn .section{{margin-bottom:10mm!important}}
+.mn .section h2{{margin-bottom:2.5mm!important}}
+.mn .section p{{line-height:1.8!important}}
+.foot{{margin-top:auto;padding-top:3mm;border-top:0.2mm solid {t['ac']}20;
 font-size:6.5pt;color:{t['st']};text-align:center}}
 </style></head><body><div class="page"><div class="wrap">
 <aside class="sb">
