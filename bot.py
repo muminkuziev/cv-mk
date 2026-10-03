@@ -15,6 +15,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup, ReplyKeyboardRemove,
 )
 from PIL import Image, ImageDraw
+from career_engine import generate_artifact
 
 try:
     from weasyprint import HTML as WP_HTML
@@ -53,6 +54,7 @@ class CV(StatesGroup):
     skills           = State()
     languages        = State()
     certifications   = State()
+    result           = State()
     preview          = State()
 
 # ── 25 Templates ──────────────────────────────────────────────────────────────
@@ -1127,8 +1129,74 @@ async def h_languages(msg,state):
 async def h_certs(msg,state):
     data=await state.get_data(); lang=data.get("lang","uz")
     if is_cancel(msg.text,lang): return await _cancel(msg,state)
-    if not is_skip(msg.text,lang): await state.update_data(certifications=msg.text.strip())
-    await _start_preview(msg,state)
+    if not is_skip(msg.text,lang):
+        await state.update_data(certifications=msg.text.strip())
+    data=await state.get_data()
+    await state.set_state(CV.result)
+    wait=await msg.answer(T[lang]["creating"], reply_markup=ReplyKeyboardRemove())
+    try:
+        cv_text=await generate_artifact(data,"cv")
+        await _send_long(msg,cv_text)
+        await msg.answer(_result_prompt(lang),reply_markup=_result_kb(lang))
+    except Exception as ex:
+        log.exception("AI CV generation error: %s",ex)
+        await msg.answer(T[lang]["error"])
+    finally:
+        try: await wait.delete()
+        except Exception: pass
+
+async def _send_long(msg: Message, text: str):
+    text=(text or "").strip()
+    if not text:
+        return await msg.answer("⚠️ Empty result")
+    while text:
+        chunk=text[:3900]
+        if len(text)>3900 and "\n" in chunk:
+            cut=chunk.rfind("\n")
+            if cut>1000: chunk=chunk[:cut]
+        await msg.answer(chunk)
+        text=text[len(chunk):].lstrip()
+
+def _result_prompt(lang: str) -> str:
+    return {
+        "uz":"✅ ATS CV tayyor. Qo'shimcha nima yaratamiz?",
+        "ru":"✅ ATS-резюме готово. Что создать дополнительно?",
+        "en":"✅ ATS CV is ready. What should I generate next?",
+    }.get(lang,"✅ ATS CV is ready.")
+
+def _result_kb(lang: str) -> InlineKeyboardMarkup:
+    labels={
+        "uz":[("✉️ Cover Letter","cover_letter"),("💼 LinkedIn Bio","linkedin"),("🧩 Portfolio","portfolio"),("🛠 Skills","skills"),("🎯 Job Titles","job_title"),("🔄 Yangi CV","restart")],
+        "ru":[("✉️ Cover Letter","cover_letter"),("💼 LinkedIn Bio","linkedin"),("🧩 Портфолио","portfolio"),("🛠 Навыки","skills"),("🎯 Job Titles","job_title"),("🔄 Новое CV","restart")],
+        "en":[("✉️ Cover Letter","cover_letter"),("💼 LinkedIn Bio","linkedin"),("🧩 Portfolio","portfolio"),("🛠 Skills","skills"),("🎯 Job Titles","job_title"),("🔄 New CV","restart")],
+    }[lang]
+    rows=[]
+    for i in range(0,len(labels),2):
+        rows.append([InlineKeyboardButton(text=t,callback_data=f"gen:{k}") for t,k in labels[i:i+2]])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+@dp.callback_query(StateFilter(CV.result),F.data.startswith("gen:"))
+async def cb_generate_artifact(cb:CallbackQuery,state:FSMContext):
+    action=cb.data.split(":",1)[1]
+    data=await state.get_data(); lang=data.get("lang","uz")
+    if action=="restart":
+        await state.clear(); await state.set_state(CV.lang)
+        await cb.message.answer(T["uz"]["welcome"],reply_markup=kb_lang(),parse_mode="HTML")
+        return await cb.answer()
+    await cb.answer()
+    wait=await cb.message.answer(T[lang]["creating"])
+    try:
+        result=await generate_artifact(data,action)
+        if not result:
+            result={"uz":"⚠️ AI kaliti sozlanmagan.","ru":"⚠️ AI-ключ не настроен.","en":"⚠️ AI key is not configured."}[lang]
+        await _send_long(cb.message,result)
+        await cb.message.answer(_result_prompt(lang),reply_markup=_result_kb(lang))
+    except Exception as ex:
+        log.exception("Artifact generation error: %s",ex)
+        await cb.message.answer(T[lang]["error"])
+    finally:
+        try: await wait.delete()
+        except Exception: pass
 
 async def _start_preview(msg:Message,state:FSMContext):
     data=await state.get_data(); lang=data.get("lang","uz")
