@@ -1158,10 +1158,10 @@ async def _start_preview(msg:Message,state:FSMContext):
                            parse_mode="HTML",reply_markup=kb_preview(0,lang))
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
-@dp.callback_query(StateFilter(CV.preview),F.data=="noop")
+@dp.callback_query(F.data=="noop")
 async def cb_noop(cb:CallbackQuery): await cb.answer()
 
-@dp.callback_query(StateFilter(CV.preview),F.data.startswith("nav:"))
+@dp.callback_query(F.data.startswith("nav:"))
 async def cb_nav(cb:CallbackQuery,state:FSMContext):
     idx=int(cb.data.split(":")[1]); data=await state.get_data(); lang=data.get("lang","uz")
     await state.update_data(template_idx=idx); tpl=TEMPLATES[idx]
@@ -1174,10 +1174,14 @@ async def cb_nav(cb:CallbackQuery,state:FSMContext):
     except Exception as ex: log.warning("edit_media: %s",ex)
     await cb.answer()
 
-@dp.callback_query(StateFilter(CV.preview),F.data.startswith("sel:"))
+@dp.callback_query(F.data.startswith("sel:"))
 async def cb_select(cb:CallbackQuery,state:FSMContext):
     idx=int(cb.data.split(":")[1]); data=await state.get_data()
     lang=data.get("lang","uz"); tpl=TEMPLATES[idx]
+    if not data.get("full_name"):
+        await cb.answer("Session yangilandi",show_alert=False)
+        await cb.message.answer("⚠️ Bot qayta ishga tushgan va eski CV sessiyasi tugagan. /start ni bosing va CV ni qayta yarating.")
+        return
     await cb.answer(f"✅ {tpl['name']}")
     try: await cb.message.edit_reply_markup(reply_markup=None)
     except Exception: pass
