@@ -87,6 +87,15 @@ TEMPLATES = [
 ]
 TPL_BY_ID = {t["id"]: t for t in TEMPLATES}
 
+TEMPLATE_GROUPS = [
+    ("corporate","🏢 Corporate / ATS",[3,4,5,17,16]),
+    ("modern","🔵 Modern / Professional",[8,13,11,15,18]),
+    ("premium","⚫ Premium / Dark",[0,1,2,9,19]),
+    ("creative","🎨 Creative / Tech",[6,7,10,14,12]),
+    ("worker","🧰 Worker / Practical",[20,21,22,23,24]),
+]
+GROUP_BY_ID={g[0]:g for g in TEMPLATE_GROUPS}
+
 UZ_VOC_LABELS = {
     "summary":"Men haqimda","experience":"Ish tajribasi","education":"Ta'lim va kurslar",
     "skills":"Ko'nikmalar","qualities":"Shaxsiy fazilatlar","languages":"Tillar",
@@ -194,13 +203,27 @@ def kb_edu(l):         return _kb(EDUCATION[l],1)
 def kb_cancel(l):      return _kb([T[l]["cancel"]],1)
 def kb_skip_cancel(l): return _kb([T[l]["skip"],T[l]["cancel"]],2)
 
-def kb_preview(idx:int, lang:str) -> InlineKeyboardMarkup:
-    t = TEMPLATES[idx]; n = len(TEMPLATES)
+def kb_groups() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️",callback_data=f"nav:{(idx-1)%n}"),
-         InlineKeyboardButton(text=f"{t['emoji']} {idx+1}/{n}",callback_data="noop"),
-         InlineKeyboardButton(text="➡️",callback_data=f"nav:{(idx+1)%n}")],
+        [InlineKeyboardButton(text=label,callback_data=f"grp:{gid}")]
+        for gid,label,_ in TEMPLATE_GROUPS
+    ])
+
+def kb_group_templates(group_id:str) -> InlineKeyboardMarkup:
+    _,label,idxs=GROUP_BY_ID[group_id]
+    rows=[[InlineKeyboardButton(
+        text=f"{TEMPLATES[i]['emoji']} {TEMPLATES[i]['name']}",
+        callback_data=f"tpl:{i}"
+    )] for i in idxs]
+    rows.append([InlineKeyboardButton(text="⬅️ Kategoriyalar",callback_data="groups")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+def kb_preview(idx:int, lang:str) -> InlineKeyboardMarkup:
+    t=TEMPLATES[idx]
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=T[lang]["select_btn"],callback_data=f"sel:{idx}")],
+        [InlineKeyboardButton(text="⬅️ 5 ta shablonga qaytish",callback_data=f"backgrp:{idx}")],
+        [InlineKeyboardButton(text="🏠 Kategoriyalar",callback_data="groups")],
     ])
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1152,17 +1175,65 @@ async def _send_long(msg: Message, text: str):
 
 async def _start_preview(msg:Message,state:FSMContext):
     data=await state.get_data(); lang=data.get("lang","uz")
-    await state.set_state(CV.preview); await state.update_data(template_idx=0)
-    await msg.answer(T[lang]["preview_hdr"],parse_mode="HTML",reply_markup=ReplyKeyboardRemove())
-    tpl=TEMPLATES[0]
-    img=make_preview(tpl,0)
-    caption=f"{tpl['emoji']} <b>{tpl['name']}</b>  (1/{len(TEMPLATES)})"
-    await msg.answer_photo(photo=BufferedInputFile(img,"preview.jpg"),caption=caption,
-                           parse_mode="HTML",reply_markup=kb_preview(0,lang))
+    await state.set_state(CV.preview)
+    title={
+        "uz":"🎨 <b>Shablon kategoriyasini tanlang</b>\n\nHar bir kategoriyada 5 ta professional CV bor.",
+        "ru":"🎨 <b>Выберите категорию шаблонов</b>\n\nВ каждой категории 5 профессиональных CV.",
+        "en":"🎨 <b>Choose a template category</b>\n\nEach category contains 5 professional CV designs.",
+    }[lang]
+    await msg.answer(title,parse_mode="HTML",reply_markup=ReplyKeyboardRemove())
+    await msg.answer("👇",reply_markup=kb_groups())
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 @dp.callback_query(F.data=="noop")
 async def cb_noop(cb:CallbackQuery): await cb.answer()
+
+@dp.callback_query(F.data=="groups")
+async def cb_groups(cb:CallbackQuery,state:FSMContext):
+    await cb.answer()
+    data=await state.get_data(); lang=data.get("lang","uz")
+    title={"uz":"🎨 Kategoriyani tanlang:","ru":"🎨 Выберите категорию:","en":"🎨 Choose a category:"}[lang]
+    await cb.message.answer(title,reply_markup=kb_groups())
+
+@dp.callback_query(F.data.startswith("grp:"))
+async def cb_group(cb:CallbackQuery,state:FSMContext):
+    gid=cb.data.split(":",1)[1]
+    if gid not in GROUP_BY_ID:
+        return await cb.answer("Topilmadi",show_alert=True)
+    await cb.answer()
+    _,label,_=GROUP_BY_ID[gid]
+    await state.update_data(template_group=gid)
+    await cb.message.answer(f"{label}\n\n5 ta shablondan birini tanlang:",reply_markup=kb_group_templates(gid))
+
+def _group_for_idx(idx:int) -> str:
+    for gid,_,idxs in TEMPLATE_GROUPS:
+        if idx in idxs:
+            return gid
+    return "corporate"
+
+@dp.callback_query(F.data.startswith("backgrp:"))
+async def cb_back_group(cb:CallbackQuery,state:FSMContext):
+    idx=int(cb.data.split(":",1)[1])
+    gid=_group_for_idx(idx)
+    await cb.answer()
+    _,label,_=GROUP_BY_ID[gid]
+    await cb.message.answer(f"{label}\n\n5 ta shablondan birini tanlang:",reply_markup=kb_group_templates(gid))
+
+@dp.callback_query(F.data.startswith("tpl:"))
+async def cb_template_preview(cb:CallbackQuery,state:FSMContext):
+    idx=int(cb.data.split(":",1)[1])
+    data=await state.get_data(); lang=data.get("lang","uz")
+    await cb.answer("⏳ Preview")
+    await state.update_data(template_idx=idx)
+    tpl=TEMPLATES[idx]
+    img=make_preview(tpl,idx)
+    caption=f"{tpl['emoji']} <b>{tpl['name']}</b>  ({idx+1}/25)"
+    await cb.message.answer_photo(
+        photo=BufferedInputFile(img,"preview.jpg"),
+        caption=caption,
+        parse_mode="HTML",
+        reply_markup=kb_preview(idx,lang),
+    )
 
 @dp.callback_query(F.data.startswith("nav:"))
 async def cb_nav(cb:CallbackQuery,state:FSMContext):
