@@ -15,7 +15,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup, ReplyKeyboardRemove,
 )
 from PIL import Image, ImageDraw
-from career_engine import generate_artifact
+from career_engine import fallback_cv
 
 try:
     from weasyprint import HTML as WP_HTML
@@ -118,7 +118,7 @@ EDUCATION = {"uz":["🏫 Maktab","🏢 Kollej / Litsey","🎓 Bakalavr","🎓 Ma
 
 T = {
     "uz":{
-        "welcome":"👋 Salom! <b>CV_MK V2.1</b> — 25 premium dizayn!\n\nHTML preview = PDF, bir xil sifat.\n\n🌍 Tilni tanlang:",
+        "welcome":"👋 Salom! <b>CV_MK Free</b> — 25 bepul CV shablon!\n\nAI API talab qilinmaydi.\n\n🌍 Tilni tanlang:",
         "name":"👤 Ism va familiyangizni yozing:","name_short":"⚠️ Ism juda qisqa. Qaytadan yozing:",
         "job":"💼 Kasbingizni tanlang:","job_custom":"✏️ Kasbingizni yozing:",
         "phone":"📞 Telefon raqamingiz:","email":"📧 Email manzilingiz:",
@@ -127,7 +127,7 @@ T = {
         "education":"🎓 Ta'lim darajangizni tanlang:","edu_custom":"✏️ Ta'limingizni yozing:",
         "skills":"🛠 Ko'nikmalar (vergul bilan):\nMasalan: Kafel, Suvoq","langs":"🌐 Tillar (vergul bilan):\nMasalan: O'zbek, Rus",
         "certs":"📜 Sertifikatlar (ixtiyoriy, ⏭ o'tkazib yuborish):\nMasalan: ISO 9001",
-        "preview_hdr":"🎨 <b>Dizayn tanlang</b> — 25 ta premium template!\n\n⬅️ ➡️ aylantiring, ✅ tanlang:",
+        "preview_hdr":"🎨 <b>Bepul shablon tanlang</b> — 25 ta variant!\n\n⬅️ ➡️ aylantiring, ✅ tanlang:",
         "creating":"⏳ CV yaratilmoqda...","pdf_ready":"✅ PDF tayyor! (A4, print-ready)",
         "html_ready":"🌐 HTML (brauzerda oching — PDF bilan bir xil ko'rinish):",
         "png_ready":"🖼 Preview:","done":"✅ CV tayyor!\n\n🔄 Yangi CV — /start",
@@ -139,7 +139,7 @@ T = {
                   "phone":"Telefon","email":"Email","address":"Manzil","footer":"CV_MK V2.1"},
     },
     "ru":{
-        "welcome":"👋 Привет! <b>CV_MK V2.1</b> — 25 премиум шаблонов!\n\nHTML = PDF, одинаковое качество.\n\n🌍 Выберите язык:",
+        "welcome":"👋 Привет! <b>CV_MK Free</b> — 25 бесплатных шаблонов CV!\n\nAI API не требуется.\n\n🌍 Выберите язык:",
         "name":"👤 Напишите имя и фамилию:","name_short":"⚠️ Имя слишком короткое. Напишите снова:",
         "job":"💼 Выберите профессию:","job_custom":"✏️ Напишите профессию:",
         "phone":"📞 Номер телефона:","email":"📧 Email:",
@@ -148,7 +148,7 @@ T = {
         "education":"🎓 Уровень образования:","edu_custom":"✏️ Напишите образование:",
         "skills":"🛠 Навыки (через запятую):\nНапример: Плитка, Штукатурка","langs":"🌐 Языки (через запятую):",
         "certs":"📜 Сертификаты (необязательно, ⏭ пропустить):",
-        "preview_hdr":"🎨 <b>Выберите дизайн</b> — 25 премиум шаблонов!\n\n⬅️ ➡️ листайте, ✅ выбирайте:",
+        "preview_hdr":"🎨 <b>Выберите бесплатный шаблон</b> — 25 вариантов!\n\n⬅️ ➡️ листайте, ✅ выбирайте:",
         "creating":"⏳ Создаём резюме...","pdf_ready":"✅ PDF готово! (A4, print-ready)",
         "html_ready":"🌐 HTML (открыть в браузере — тот же вид что PDF):",
         "png_ready":"🖼 Превью:","done":"✅ Резюме готово!\n\n🔄 Новое — /start",
@@ -160,7 +160,7 @@ T = {
                   "phone":"Телефон","email":"Email","address":"Адрес","footer":"CV_MK V2.1"},
     },
     "en":{
-        "welcome":"👋 Hello! <b>CV_MK V2.1</b> — 25 premium designs!\n\nHTML = PDF, identical quality.\n\n🌍 Choose language:",
+        "welcome":"👋 Hello! <b>CV_MK Free</b> — 25 free CV templates!\n\nNo AI API required.\n\n🌍 Choose language:",
         "name":"👤 Enter your full name:","name_short":"⚠️ Name too short. Please write again:",
         "job":"💼 Choose your profession:","job_custom":"✏️ Write your profession:",
         "phone":"📞 Phone number:","email":"📧 Email:",
@@ -169,7 +169,7 @@ T = {
         "education":"🎓 Education level:","edu_custom":"✏️ Write your education:",
         "skills":"🛠 Skills (comma-separated):\nExample: Tiling, Plastering","langs":"🌐 Languages (comma-separated):",
         "certs":"📜 Certifications (optional, ⏭ skip):\nExample: ISO 9001",
-        "preview_hdr":"🎨 <b>Choose your design</b> — 25 premium templates!\n\n⬅️ ➡️ browse, ✅ select:",
+        "preview_hdr":"🎨 <b>Choose a free template</b> — 25 options!\n\n⬅️ ➡️ browse, ✅ select:",
         "creating":"⏳ Creating your CV...","pdf_ready":"✅ PDF ready! (A4, print-ready)",
         "html_ready":"🌐 HTML (open in browser — same look as PDF):",
         "png_ready":"🖼 Preview:","done":"✅ CV ready!\n\n🔄 New CV — /start",
@@ -1132,18 +1132,9 @@ async def h_certs(msg,state):
     if not is_skip(msg.text,lang):
         await state.update_data(certifications=msg.text.strip())
     data=await state.get_data()
-    await state.set_state(CV.result)
-    wait=await msg.answer(T[lang]["creating"], reply_markup=ReplyKeyboardRemove())
-    try:
-        cv_text=await generate_artifact(data,"cv")
-        await _send_long(msg,cv_text)
-        await msg.answer(_result_prompt(lang),reply_markup=_result_kb(lang))
-    except Exception as ex:
-        log.exception("AI CV generation error: %s",ex)
-        await msg.answer(T[lang]["error"])
-    finally:
-        try: await wait.delete()
-        except Exception: pass
+    cv_text=fallback_cv(data)
+    await _send_long(msg,cv_text)
+    await _start_preview(msg,state)
 
 async def _send_long(msg: Message, text: str):
     text=(text or "").strip()
